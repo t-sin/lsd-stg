@@ -3,9 +3,11 @@
   (:import-from #:cl-glfw3
                 #:with-init-window
                 #:def-key-callback
+                #:get-proc-address
                 #:set-key-callback
                 #:set-window-should-close
                 #:window-should-close-p
+                #:swap-buffers
                 #:poll-events)
   (:export #:main))
 (in-package #:lsd)
@@ -23,11 +25,50 @@
 
 (defun show-window (context)
   (with-init-window (:title (getf context :title)
-                            :width (getf context :width)
-                            :height (getf context :height))
+                     :width (getf context :width)
+                     :height (getf context :height)
+                     :context-version-major 4
+                     :context-version-minor 0
+                     :resizable nil)
+    ;; print OpenGL version
+    (format t "OpenGL version: ~a.~a.~a"
+            (glfw:get-window-attribute :context-version-major)
+            (glfw:get-window-attribute :context-version-minor)
+            (glfw:get-window-attribute :context-revision))
     (set-key-callback 'quit-on-escape)
+    (gl:clear-color 1 1 1 1)
+
+    (let* ((vs-code '(pos))
+           (fs-code '((vari:vec4 1 1 1 1)))
+           (vsc (varjo:translate (varjo:make-stage :vertex '((pos :vec4)) nil '(:400) vs-code)))
+           (fsc (varjo:translate (varjo:make-stage :fragment '() nil '(:400) fs-code)))
+           (vs (gl:create-shader :vertex-shader))
+           (fs (gl:create-shader :fragment-shader))
+           (p (gl:create-program)))
+      ;; (print (varjo:glsl-code vsc))
+      ;; (print (varjo:glsl-code fsc))
+      (gl:shader-source vs (varjo:glsl-code vsc))
+      (gl:compile-shader vs)
+      (print (gl:get-shader-info-log vs))
+      (gl:attach-shader p vs)
+      (gl:delete-shader vs)
+
+      (gl:shader-source fs (varjo:glsl-code fsc))
+      (gl:compile-shader fs)
+      (gl:attach-shader p fs)
+      (gl:delete-shader fs)
+
+      (gl:bind-attrib-location p 0 "POS")
+      (let ((outname (varjo:glsl-name (nth 0 (varjo:output-variables fsc)))))
+        (gl:bind-frag-data-location p 0 outname))
+
+      (gl:link-program p)
+      (gl:use-program p))
     (loop
       :until (window-should-close-p)
+      :do (progn
+            (gl:clear :color-buffer))
+      :do (swap-buffers)
       :do (poll-events))))
 
 (defun main ()
