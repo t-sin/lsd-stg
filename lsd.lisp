@@ -23,33 +23,83 @@
   (when (and (eq key :escape) (eq action :press))
     (set-window-should-close)))
 
+;;; shader functions
+
+(defun make-shader (type in-args uniforms code)
+  (varjo:translate (varjo:make-stage type in-args uniforms '(:400) code)))
+
+(defun make-shader-object (shader)
+  (let* ((type (intern (format nil "~a-SHADER" (symbol-name (varjo:stage-kind shader))) :keyword))
+         (so (gl:create-shader type)))
+    (gl:shader-source so (varjo:glsl-code shader))
+    (gl:compile-shader so)
+    (let ((errstr (gl:get-shader-info-log so)))
+      (unless (string= errstr "")
+        (error errstr)))
+    so))
+
+(defun make-program (shaders)
+  (let* ((program (gl:create-program))
+         (shaderobjs (loop
+                       :for s :in shaders
+                       :collect (let ((so (make-shader-object s)))
+                                  (gl:attach-shader program so)
+                                  so))))
+    (values program shaderobjs)))
+
+
+;; vertex functions
+
+(defun make-gl-array (seq type)
+  (let ((arr (gl:alloc-gl-array type (length seq))))
+    (loop
+      :for n :from 0 :below (length seq)
+      :do (setf (gl:glaref arr n) (elt seq n)))
+    arr))
+
+(defmacro with-framebuffer ((&optional fbuffer) &body body)
+  `(progn
+     (when ,fbuffer (gl:bind-framebuffer :framebuffer fbuffer))
+     ,@body
+     (when ,fbuffer (gl:bind-framebuffer :framebuffer 0))))
+
+(defun draw-vertex (type vertex)
+  (let* ((vao (gl:gen-vertex-array))
+         (vbo (gl:gen-buffers 1))
+         (arr (make-gl-array vertex :float)))
+    (gl:bind-vertex-array vao)
+    (gl:bind-buffer :array-buffer (elt vbo 0))
+    (gl:buffer-data :array-buffer :static-draw arr)
+    (gl:vertex-attrib-pointer 0 2 :float nil 0 0)
+    (gl:enable-vertex-attrib-array 0)
+    (gl:draw-arrays type 0 (length vertex))))
+
+;; application code
+
 (defun setup-shader ()
-  (let* ((vs-code '(pos))
-         (fs-code '((vari:vec4 0 0 1 1)))
-         (vsc (varjo:translate (varjo:make-stage :vertex '((pos :vec4)) nil '(:400) vs-code)))
-         (fsc (varjo:translate (varjo:make-stage :fragment '() nil '(:400) fs-code)))
-         (vs (gl:create-shader :vertex-shader))
-         (fs (gl:create-shader :fragment-shader))
-         (p (gl:create-program)))
-    ;; (print (varjo:glsl-code vsc))
-    ;; (print (varjo:glsl-code fsc))
-    (gl:shader-source vs (varjo:glsl-code vsc))
-    (gl:compile-shader vs)
-    (print (gl:get-shader-info-log vs))
-    (gl:attach-shader p vs)
-    (gl:delete-shader vs)
+  (let* ((vert (make-shader :vertex '((pos :vec4)) nil '(pos)))
+         (frag (make-shader :fragment '() nil '((vari:vec4 0 0 1 1))))
+         (shaders (list vert frag)))
+    (multiple-value-bind (p slis)
+        (make-program shaders)
+      (loop
+        :for iv :in (varjo:input-variables vert)
+        :for n :from 0
+        :do (gl:bind-attrib-location p n (varjo:glsl-name iv)))
 
-    (gl:shader-source fs (varjo:glsl-code fsc))
-    (gl:compile-shader fs)
-    (gl:attach-shader p fs)
-    (gl:delete-shader fs)
+      (loop
+        :for ov :in (varjo:output-variables frag)
+        :for n :from 0
+        :do (gl:bind-frag-data-location p n (varjo:glsl-name ov)))
 
-    (gl:bind-attrib-location p 0 "POS")
-    (let ((outname (varjo:glsl-name (nth 0 (varjo:output-variables fsc)))))
-      (gl:bind-frag-data-location p 0 outname))
+      (gl:link-program p)
+      p)))
 
-    (gl:link-program p)
-    (gl:use-program p)))
+(defun render (context)
+  (gl:clear :color-buffer)
+  (gl:use-program (setup-shader))
+  (draw-vertex :lines #(0.8 0.8 1.0 1.0 0.5 0.5))
+  (draw-vertex :triangles #(0.0 0.0 0.0 0.5 0.5 0.5 0.0 0.0)))
 
 (defun show-window (context)
   (with-init-window (:title (getf context :title)
@@ -67,28 +117,12 @@
     (gl:clear-color 1 1 1 1)
     (setup-shader)
 
-    (let* ((vao (gl:gen-vertex-array))
-           (vbo (gl:gen-buffers 1))
-           (vertex #(-0.5 -0.5 0.5 -0.5 0.5 0.5 -0.5 0.5))
-           (arr (gl:alloc-gl-array :float (length vertex))))
-      (gl:bind-vertex-array vao)
-
-      (loop
-        :for n :from 0 :below (length vertex)
-        :do (setf (gl:glaref arr n) (elt vertex n)))
-
-      (gl:bind-buffer :array-buffer (elt vbo 0))
-      (gl:buffer-data :array-buffer :static-draw arr)
-      (gl:vertex-attrib-pointer 0 2 :float nil 0 0)
-      (gl:enable-vertex-attrib-array 0)
-
-      (loop
-        :until (window-should-close-p)
-        :do (progn
-              (gl:clear :color-buffer)
-              (gl:draw-arrays :triangles 0 (length vertex)))
-        :do (swap-buffers)
-        :do (poll-events)))))
+    (loop
+      :until (window-should-close-p)
+      :do (progn
+            (render context)
+            (swap-buffers)
+            (poll-events)))))
 
 (defun main ()
   (show-window *context*))
