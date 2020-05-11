@@ -1,128 +1,136 @@
 (defpackage #:lsd
   (:use #:cl)
-  (:import-from #:cl-glfw3
-                #:with-init-window
-                #:def-key-callback
-                #:get-proc-address
-                #:set-key-callback
-                #:set-window-should-close
-                #:window-should-close-p
-                #:swap-buffers
-                #:poll-events)
   (:export #:main))
 (in-package #:lsd)
 
-(defparameter *context*
+(defparameter *game*
   (list :title "Lazy Sweet Dream"
         :version (asdf:component-version (asdf:find-system :lsd))
         :width 800
         :height 600))
 
-(def-key-callback quit-on-escape (window key scancode action mod-keys)
-  (declare (ignore window scancode mod-keys))
-  (when (and (eq key :escape) (eq action :press))
-    (set-window-should-close)))
+(defparameter *entity-count* 0)
+(defun make-entity-id ()
+  (prog1 *entity-count*
+    (incf *entity-count*)))
 
-;;; shader functions
+(defstruct point id x y)
+(defstruct velocity id x y)
+(defstruct direction id r)
+(defstruct otype id name)
+(defstruct input id u d l r z)
+(defstruct used id bool)
 
-(defun make-shader (type in-args uniforms code)
-  (varjo:translate (varjo:make-stage type in-args uniforms '(:400) code)))
+(defstruct shooter
+  tick
+  points vels dirs types inputs used)
 
-(defun make-shader-object (shader)
-  (let* ((type (intern (format nil "~a-SHADER" (symbol-name (varjo:stage-kind shader))) :keyword))
-         (so (gl:create-shader type)))
-    (gl:shader-source so (varjo:glsl-code shader))
-    (gl:compile-shader so)
-    (let ((errstr (gl:get-shader-info-log so)))
-      (unless (string= errstr "")
-        (error errstr)))
-    so))
+(defun init-shooter ()
+  (let ((points ())
+        (vels ())
+        (dirs ())
+        (types ())
+        (inputs ())
+        (used ()))
+    (flet ((make-player ()
+             (let ((id (make-entity-id)))
+               (push (make-otype :id id :name :player) types)
+               (push (make-used :id id :bool t) used)
+               (push (make-point :id id :x 400 :y 400) points)
+               (push (make-direction :id id :r 0) dirs)
+               (push (make-input :id id :u nil :d nil :l nil :r nil :z nil) inputs)))
+           (make-enemy ()
+             (let ((id (make-entity-id)))
+               (push (make-otype :id id :name :enemy) types)
+               (push (make-used :id id :bool t) used)
+               (push (make-point :id id :x 400 :y 200) points)
+               (push (make-direction :id id :r 0) dirs)))
+           (make-bullet ()
+             (let ((id (make-entity-id)))
+               (push (make-otype :id id :name :bullet) types)
+               (push (make-used :id id :bool nil) used)
+               (push (make-point :id id
+                                 :x (random 800)
+                                 :y (random 600))
+                     points)
+               (push (make-velocity :id id
+                                    :x (- (random 10) 5)
+                                    :y (- (random 10) 5))
+                     vels)
+               (push (make-direction :id id :r 0) dirs))))
+      (make-player)
+      (make-enemy)
+      (loop :for _ :from 0 :upto 1000 :do (make-bullet))
+      (make-shooter :tick 0
+                    :points (coerce points 'vector)
+                    :vels (coerce vels 'vector)
+                    :dirs (coerce dirs 'vector)
+                    :types (coerce types 'vector)
+                    :inputs (coerce inputs 'vector)
+                    :used used))))
 
-(defun make-program (shaders)
-  (let* ((program (gl:create-program))
-         (shaderobjs (loop
-                       :for s :in shaders
-                       :collect (let ((so (make-shader-object s)))
-                                  (gl:attach-shader program so)
-                                  so))))
-    (values program shaderobjs)))
+(defun update-points (shooter)
+  (loop
+    :for p :across (shooter-points shooter)
+    :do (let* ((id (point-id p))
+               (v (find id (shooter-vels shooter) :key #'velocity-id)))
+          (unless (null v)
+            (setf (point-x p) (+ (point-x p) (velocity-x v))
+                  (point-y p) (+ (point-y p) (velocity-y v)))))))
 
+(defun draw-points (shooter renderer)
+  (sdl2:set-render-draw-color renderer 30 30 30 255)
+  (loop
+    :for p :across (shooter-points shooter)
+    :when (let ((a (find (point-id p) (shooter-used shooter) :key #'used-id)))
+            (used-bool a))
+    :do (sdl2:render-draw-rect renderer
+                               (sdl2:make-rect (- (floor (point-x p)) 3)
+                                               (- (floor (point-y p)) 3)
+                                               6 6))))
 
-;; vertex functions
-
-(defun make-gl-array (seq type)
-  (let ((arr (gl:alloc-gl-array type (length seq))))
-    (loop
-      :for n :from 0 :below (length seq)
-      :do (setf (gl:glaref arr n) (elt seq n)))
-    arr))
-
-(defmacro with-framebuffer ((&optional fbuffer) &body body)
-  `(progn
-     (when ,fbuffer (gl:bind-framebuffer :framebuffer fbuffer))
-     ,@body
-     (when ,fbuffer (gl:bind-framebuffer :framebuffer 0))))
-
-(defun draw-vertex (type vertex)
-  (let* ((vao (gl:gen-vertex-array))
-         (vbo (gl:gen-buffers 1))
-         (arr (make-gl-array vertex :float)))
-    (gl:bind-vertex-array vao)
-    (gl:bind-buffer :array-buffer (elt vbo 0))
-    (gl:buffer-data :array-buffer :static-draw arr)
-    (gl:vertex-attrib-pointer 0 2 :float nil 0 0)
-    (gl:enable-vertex-attrib-array 0)
-    (gl:draw-arrays type 0 (length vertex))))
-
-;; application code
-
-(defun setup-shader ()
-  (let* ((vert (make-shader :vertex '((pos :vec4)) nil '(pos)))
-         (frag (make-shader :fragment '() nil '((vari:vec4 0 0 1 1))))
-         (shaders (list vert frag)))
-    (multiple-value-bind (p slis)
-        (make-program shaders)
-      (loop
-        :for iv :in (varjo:input-variables vert)
-        :for n :from 0
-        :do (gl:bind-attrib-location p n (varjo:glsl-name iv)))
-
-      (loop
-        :for ov :in (varjo:output-variables frag)
-        :for n :from 0
-        :do (gl:bind-frag-data-location p n (varjo:glsl-name ov)))
-
-      (gl:link-program p)
-      p)))
-
-(defun render (context)
-  (gl:clear :color-buffer)
-  (gl:use-program (setup-shader))
-  (draw-vertex :lines #(0.8 0.8 1.0 1.0 0.5 0.5))
-  (draw-vertex :triangles #(0.0 0.0 0.0 0.5 0.5 0.5 0.0 0.0)))
-
-(defun show-window (context)
-  (with-init-window (:title (getf context :title)
-                     :width (getf context :width)
-                     :height (getf context :height)
-                     :context-version-major 4
-                     :context-version-minor 0
-                     :resizable nil)
-    ;; print OpenGL version
-    (format t "OpenGL version: ~a.~a.~a"
-            (glfw:get-window-attribute :context-version-major)
-            (glfw:get-window-attribute :context-version-minor)
-            (glfw:get-window-attribute :context-revision))
-    (set-key-callback 'quit-on-escape)
-    (gl:clear-color 1 1 1 1)
-    (setup-shader)
-
-    (loop
-      :until (window-should-close-p)
-      :do (progn
-            (render context)
-            (swap-buffers)
-            (poll-events)))))
+(defun shot-bullets (shooter)
+  (let* ((e (find :enemy (shooter-types shooter) :key #'otype-name))
+         (id (otype-id e)))
+    (unless (null e)
+      (let ((p (find id (shooter-points shooter) :key #'point-id)))
+        (unless (null p)
+          (let ((n 20))
+            (loop
+              :for i := n :then (decf i)
+              :while (plusp i)
+              :do (let ((u (find nil (shooter-used shooter) :key #'used-bool)))
+                    (unless (null u)
+                      (setf (used-bool u) t)
+                      (let ((bp (find (used-id u) (shooter-points shooter) :key #'point-id))
+                            (bv (find (used-id u) (shooter-vels shooter) :key #'velocity-id)))
+                        (unless (or (null bp) (null bv))
+                          (setf (point-x bp) (point-x p)
+                                (point-y bp) (point-y p)
+                                (velocity-x bv) (* 3 (cos (* 2 pi (/ i n))))
+                                (velocity-y bv) (* 3 (sin (* 2 pi (/ i n))))))))))))))))
 
 (defun main ()
-  (show-window *context*))
+  (sdl2:with-init (:everything)
+    (sdl2:with-window (win :title (getf *game* :title)
+                           :w (getf *game* :width)
+                           :h (getf *game* :height))
+      (sdl2:with-renderer (renderer win :index -1 :flags '(:accelerated))
+        (let ((screen-rect (sdl2:make-rect 0 0 (getf *game* :width) (getf *game* :height)))
+              (shooter (init-shooter)))
+          (sdl2:with-event-loop (:method :poll)
+            (:keyup (:keysym keysym)
+             (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-escape)
+               (sdl2:push-event :quit)))
+            (:idle ()
+             (sdl2:set-render-draw-color renderer 200 200 200 255)
+             (sdl2:render-fill-rect renderer screen-rect)
+             (draw-points shooter renderer)
+             (update-points shooter)
+             (when (zerop (mod (shooter-tick shooter) 12))
+               (shot-bullets shooter))
+             (incf (shooter-tick shooter))
+             (sdl2:render-present renderer)
+
+             (sdl2:delay (floor (/ 1000 60))))
+            (:quit () t)))))))
