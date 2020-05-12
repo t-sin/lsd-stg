@@ -98,15 +98,15 @@
                     :inputs (coerce inputs 'vector)
                     :used used))))
 
-(defun update-inputs (shooter &key u d l r z)
+(defun update-inputs (shooter &key (u nil u?) (d nil d?) (l nil l?) (r nil r?) (z nil z?))
   (loop
     :for i :across (shooter-inputs shooter)
     :do (progn
-          (setf (input-u i) u)
-          (setf (input-d i) d)
-          (setf (input-l i) l)
-          (setf (input-r i) r)
-          (setf (input-z i) z))))
+          (when u? (setf (input-u i) u))
+          (when d? (setf (input-d i) d))
+          (when l? (setf (input-l i) l))
+          (when r? (setf (input-r i) r))
+          (when z? (setf (input-z i) z)))))
 
 (defun update-player (shooter)
   (let* ((player (find :player (shooter-types shooter) :key #'otype-name))
