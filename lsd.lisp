@@ -1,4 +1,4 @@
-(defpackage #:lsd
+q(defpackage #:lsd
   (:use #:cl)
   (:export #:main))
 (in-package #:lsd)
@@ -19,7 +19,7 @@
 (defstruct direction id r)
 (defstruct vanish id x y w h)
 (defstruct otype id name)
-(defstruct input id u d l r z)
+(defstruct input id u d l r s z)
 (defstruct used id bool)
 (defstruct script id code ip stack)
 
@@ -98,7 +98,7 @@
                     :inputs (coerce inputs 'vector)
                     :used used))))
 
-(defun update-inputs (shooter &key (u nil u?) (d nil d?) (l nil l?) (r nil r?) (z nil z?))
+(defun update-inputs (shooter &key (u nil u?) (d nil d?) (l nil l?) (r nil r?) (s nil s?) (z nil z?))
   (loop
     :for i :across (shooter-inputs shooter)
     :do (progn
@@ -106,16 +106,18 @@
           (when d? (setf (input-d i) d))
           (when l? (setf (input-l i) l))
           (when r? (setf (input-r i) r))
+          (when s? (setf (input-s i) s))
           (when z? (setf (input-z i) z)))))
 
 (defun update-player (shooter)
   (let* ((player (find :player (shooter-types shooter) :key #'otype-name))
          (p (get-component shooter (otype-id player) :point))
          (i (get-component shooter (otype-id player) :input)))
-    (when (input-u i) (incf (point-y p) -5))
-    (when (input-d i) (incf (point-y p) 5))
-    (when (input-l i) (incf (point-x p) -5))
-    (when (input-r i) (incf (point-x p) 5))))
+    (let ((move (if (input-s) 3 5)))
+      (when (input-u i) (incf (point-y p) (- move)))
+      (when (input-d i) (incf (point-y p) move))
+      (when (input-l i) (incf (point-x p) (- move)))
+      (when (input-r i) (incf (point-x p) move)))))
 
 (defun update-points (shooter)
   (loop
@@ -184,6 +186,8 @@
                (update-inputs shooter :l t))
              (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-right)
                (update-inputs shooter :r t))
+             (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-lshift)
+               (update-inputs shooter :s t))
              (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-z)
                (update-inputs shooter :z t))
              (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-escape)
@@ -197,6 +201,8 @@
                (update-inputs shooter :l nil))
              (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-right)
                (update-inputs shooter :r nil))
+             (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-lshift)
+               (update-inputs shooter :s nil))
              (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-z)
                (update-inputs shooter :z nil)))
             (:idle ()
