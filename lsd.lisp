@@ -78,6 +78,14 @@
                              (push (/ (* 180 (pop (script-pstack script))) PI)
                                    (script-pstack script))
                              (incf ip)))
+                     (:sin (progn
+                             (push (sin (pop (script-pstack script)))
+                                   (script-pstack script))
+                             (incf ip)))
+                     (:cos (progn
+                             (push (cos (pop (script-pstack script)))
+                                   (script-pstack script))
+                             (incf ip)))
                      (:eq (progn
                             (push (equal (pop (script-pstack script))
                                          (pop (script-pstack script)))
