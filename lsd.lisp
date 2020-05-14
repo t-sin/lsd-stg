@@ -69,6 +69,14 @@
             (cond ((and (not (null inst)) (symbolp inst))
                    (case inst
 ;;                     (:.s (print (script-pstack script) #.*standard-output*))
+                     (:d2r (progn
+                             (push (/ (* PI (pop (script-pstack script))) 180)
+                                   (script-pstack script))
+                             (incf ip)))
+                     (:r2d (progn
+                             (push (/ (* 180 (pop (script-pstack script))) PI)
+                                   (script-pstack script))
+                             (incf ip)))
                      (:eq (progn
                             (push (equal (pop (script-pstack script))
                                          (pop (script-pstack script)))
@@ -91,14 +99,46 @@
                                       ip 0)
                                 (setf code false-clause
                                       ip 0))))
+                     (:swap (let ((a (pop (script-pstack script)))
+                                  (b (pop (script-pstack script))))
+                              (push a (script-pstack script))
+                              (push b (script-pstack script))
+                              (incf ip)))
+                     (:add (progn
+                             (push (+ (pop (script-pstack script))
+                                      (pop (script-pstack script)))
+                                   (script-pstack script))
+                             (incf ip)))
+                     (:rnd (progn
+                             (push (random 1.0)
+                                   (script-pstack script))
+                             (incf ip)))
+                     (:getp (progn
+                              (push (point-y point) (script-pstack script))
+                              (push (point-y point) (script-pstack script))
+                              (incf ip)))
+                     (:setp (let ((y (pop (script-pstack script)))
+                                  (x (pop (script-pstack script))))
+                              (setf (point-x point) x
+                                    (point-y point) y)
+                              (incf ip)))
+                     (:getv (progn
+                              (push (velocity-y vel) (script-pstack script))
+                              (push (velocity-y vel) (script-pstack script))
+                              (incf ip)))
+                     (:setv (let ((vy (pop (script-pstack script)))
+                                  (vx (pop (script-pstack script))))
+                              (setf (velocity-x vel) vx
+                                    (velocity-y vel) vy)
+                              (incf ip)))
                      (:shot (let ((u (find nil (shooter-used shooter) :key #'used-bool)))
                               (when u
                                 (let* ((id (used-id u))
                                        (p (get-component shooter id :point))
                                        (v (get-component shooter id :velocity))
                                        (s (get-component shooter id :script))
-                                       (vx (pop (script-pstack script)))
                                        (vy (pop (script-pstack script)))
+                                       (vx (pop (script-pstack script)))
                                        (code (pop (script-pstack script))))
                                   (setf (used-bool u) t)
                                   (setf (point-x p) (point-x point)
@@ -130,7 +170,7 @@
                (push (make-entity db :script :id id :code () :pstack ()) scripts)))
            (make-enemy ()
              (let ((id (make-entity-id))
-                   (code '(tick 10 mod 0 eq (() -1 -1 shot) () if)))
+                   (code '(tick 10 mod 0 eq (() rnd rnd shot) () if)))
                (push (make-entity db :otype :id id :name :enemy) types)
                (push (make-entity db :tick :id id :tick -1) ticks)
                (push (make-entity db :used :id id :bool t) used)
