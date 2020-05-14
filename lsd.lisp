@@ -118,6 +118,10 @@
                                 (setf code false-clause
                                       (script-pstack script) nil
                                       ip 0))))
+                     (:dup (let ((a (pop (script-pstack script))))
+                             (push a (script-pstack script))
+                             (push a (script-pstack script))
+                             (incf ip)))
                      (:swap (let ((a (pop (script-pstack script)))
                                   (b (pop (script-pstack script))))
                               (push a (script-pstack script))
