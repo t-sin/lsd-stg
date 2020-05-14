@@ -56,14 +56,26 @@
     (loop
       :do (when (>= ip (length code))
             (let ((c (pop cstack)))
-              (if (and (not (null c)) (listp c))
-                  (progn
-                    (setf code (first c)
-                          ip (second c)
-                          (script-pstack script) (third c))
-                    (when (>= ip (length code))
-                      (return-from eval-object-1)))
+              (if (listp c)
+                  (case (first c)
+                    (:if (setf code (second c)
+                               ip (third c)
+                               (script-pstack script) (fourth c)))
+                    (:do (let ((doinfo (second c)))
+                           (if (> (first doinfo) (second doinfo))
+                               (setf code (third c)
+                                     ip (fourth c)
+                                     (script-pstack script) (fifth c))
+                               (progn
+                                 (setf (script-pstack script) nil
+                                       ip 0)
+                                 (push (incf (first (second c)) (third doinfo))
+                                       (script-pstack script))
+                                 (push c cstack)))))
+                    (otherwise (return-from eval-object-1)))
                   (return-from eval-object-1))))
+      :do (when (>= ip (length code))
+            (return-from eval-object-1))
       :do (let* ((c (elt code ip))
                  (inst (if (and (not (null c)) (symbolp c)) (intern (symbol-name c) :keyword) c)))
 ;;            (print (list ip inst cstack) #.*standard-output*)
@@ -118,7 +130,7 @@
                      (:if (let* ((false-clause (pop (script-pstack script)))
                                  (true-clause (pop (script-pstack script)))
                                  (value (pop (script-pstack script))))
-                            (push (list code (1+ ip) (script-pstack script)) cstack)
+                            (push (list :if code (1+ ip) (script-pstack script)) cstack)
                             (if value
                                 (setf code true-clause
                                       (script-pstack script) nil
