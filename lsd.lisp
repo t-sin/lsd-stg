@@ -56,10 +56,11 @@
     (loop
       :do (when (>= ip (length code))
             (let ((c (pop cstack)))
-              (if (consp c)
+              (if (and (not (null c)) (listp c))
                   (progn
-                    (setf code (car c)
-                          ip (cdr c))
+                    (setf code (first c)
+                          ip (second c)
+                          (script-pstack script) (third c))
                     (when (>= ip (length code))
                       (return-from eval-object-1)))
                   (return-from eval-object-1))))
@@ -93,11 +94,13 @@
                      (:if (let* ((false-clause (pop (script-pstack script)))
                                  (true-clause (pop (script-pstack script)))
                                  (value (pop (script-pstack script))))
-                            (push (cons code (1+ ip)) cstack)
+                            (push (list code (1+ ip) (script-pstack script)) cstack)
                             (if value
                                 (setf code true-clause
+                                      (script-pstack script) nil
                                       ip 0)
                                 (setf code false-clause
+                                      (script-pstack script) nil
                                       ip 0))))
                      (:swap (let ((a (pop (script-pstack script)))
                                   (b (pop (script-pstack script))))
