@@ -181,7 +181,8 @@
                                         (point-y p) (point-y point))
                                   (setf (velocity-x v) vx
                                         (velocity-y v) vy)
-                                  (setf (script-code s) code)))
+                                  (setf (script-code s) code
+                                        (script-pstack s) nil)))
                               (incf ip)))))
                   (t (push inst (script-pstack script))
                      (incf ip)))))))
