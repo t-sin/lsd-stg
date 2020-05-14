@@ -126,6 +126,14 @@
                                 (setf code false-clause
                                       (script-pstack script) nil
                                       ip 0))))
+                     (:do (let ((diff (pop (script-pstack script)))
+                                (e (pop (script-pstack script)))
+                                (s (pop (script-pstack script)))
+                                (proc (pop (script-pstack script))))
+                            (push (list :do (list s e diff) code (1+ ip) (script-pstack script)) cstack)
+                            (setf code proc
+                                  (script-pstack script) (list s)
+                                  ip 0)))
                      (:dup (let ((a (pop (script-pstack script))))
                              (push a (script-pstack script))
                              (push a (script-pstack script))
