@@ -150,7 +150,7 @@
                                    (script-pstack script))
                              (incf ip)))
                      (:getp (progn
-                              (push (point-y point) (script-pstack script))
+                              (push (point-x point) (script-pstack script))
                               (push (point-y point) (script-pstack script))
                               (incf ip)))
                      (:setp (let ((y (pop (script-pstack script)))
@@ -159,11 +159,11 @@
                                     (point-y point) y)
                               (incf ip)))
                      (:getv (progn
-                              (push (velocity-y vel) (script-pstack script))
+                              (push (velocity-x vel) (script-pstack script))
                               (push (velocity-y vel) (script-pstack script))
                               (incf ip)))
-                     (:setv (let ((vy (pop (script-pstack script)))
-                                  (vx (pop (script-pstack script))))
+                     (:setv (let ((vx (pop (script-pstack script)))
+                                  (vy (pop (script-pstack script))))
                               (setf (velocity-x vel) vx
                                     (velocity-y vel) vy)
                               (incf ip)))
