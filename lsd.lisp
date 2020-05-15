@@ -293,16 +293,25 @@
        (code `(;;<<g nil eq (0 0 >g) () if
                ;; atick 5 mod 0 eq
                ;; ((,bullet-code
-               ;;   swap dup >rad cos 5 mul swap >rad sin 5 mul shot)
+               ;;   swap dup >rad cos 5 mul swap >
                ;;  <<g <<g 360 add 40 do
                ;; () if
                atick 0 eq
-               ((<<g nil eq (1 0 >g >g) () if
-                     <g <g over over swap >g >g swap >rad cos swap mul 400 add
-                     <g <g over over swap >g >g swap >rad sin swap mul 300 add
-                     setp
-                     <g <g swap 3 add swap dup 100 gte () (2 add) if swap >g >g)
-                0 0 shot)
+               (((;; P: angle radius
+                  ;; G: (x . y)
+                  over over swap >rad cos swap mul <<g car add
+                  rot rot
+                  over over swap >rad sin swap mul <<g cdr add
+                  >g rot <g
+                  setp
+                  swap 4 add swap dup 100 gte (drop 100) (2 add) if
+                  atick 10 mod 0 eq ((getp swap drop dup -50 lt swap 610 gt or (vanish) () if
+                                      getp drop dup -50 lt swap 810 gt or (vanish) () if)
+                                     nil nil getp <<g cdr sub 100 div swap <<g car sub 100 div swap shot) () if)
+                 swap 1 nil cons cons
+                 getp cons nil cons
+                 0 0 shot)
+                 0 359 45 do)
                () if
                ;;<g 3.5 add >g
                )))
