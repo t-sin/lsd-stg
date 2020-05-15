@@ -83,10 +83,10 @@
             (cond ((and (not (null inst)) (symbolp inst))
                    (case inst
                      ;;(:.s (print (actor-pstack actor) #.*standard-output*))
-                     (:d2r (progn
+                     (:>rad (progn
                              (push (/ (* PI (pop (actor-pstack actor))) 180) (actor-pstack actor))
                              (incf ip)))
-                     (:r2d (progn
+                     (:>deg (progn
                              (push (/ (* 180 (pop (actor-pstack actor))) PI) (actor-pstack actor))
                              (incf ip)))
                      (:sin (progn
