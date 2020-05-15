@@ -267,14 +267,15 @@
                (push (make-entity db :input :id id :u nil :d nil :l nil :r nil :z nil) inputs)))
            (make-enemy ()
              (let* ((id (make-entity-id))
-                    (bullet-code `(getp drop dup 100 lt swap 700 gt or (vanish) () if
-                                        atick 50 gte
-                                        (() getv 90 >rad vecrot shot vanish)
-                                        () if
-                                        getv 0.97 mul swap 0.97 mul setv))
+                    (bullet-code `(atick 60 gte
+                                         ((getp swap drop dup -50 lt swap 610 gt or (vanish) () if
+                                                getp drop dup -50 lt swap 810 gt or (vanish) () if)
+                                          getv 90 >rad v/rot 3 v/mul shot vanish)
+                                         () if
+                                        getv 0.965 mul swap 0.965 mul setv))
                     (code `(<<g nil eq (0 >g) () if
                                 atick 10 mod 0 eq
-                                ((,bullet-code swap dup >rad cos 10 mul swap >rad sin 10 mul shot)
+                                ((,bullet-code swap dup >rad cos 8 mul swap >rad sin 8 mul shot)
                                  <<g <<g 360 add 10 do <g 7 add >g)
                                 () if)))
                (push (make-entity db :actor
