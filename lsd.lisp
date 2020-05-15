@@ -81,6 +81,7 @@
             (cond ((and (not (null inst)) (symbolp inst))
                    (case inst
                      ;;(:.s (print (actor-pstack actor) #.*standard-output*))
+                     ;;; trigonometric
                      (:>rad (progn
                               (push (/ (* PI (pop (actor-pstack actor))) 180) (actor-pstack actor))
                               (incf ip)))
@@ -93,6 +94,7 @@
                      (:cos (progn
                              (push (cos (pop (actor-pstack actor))) (actor-pstack actor))
                              (incf ip)))
+                     ;;; logical
                      (:eq (progn
                             (push (equal (pop (actor-pstack actor)) (pop (actor-pstack actor))) (actor-pstack actor))
                             (incf ip)))
@@ -104,6 +106,7 @@
                                  (a (pop (actor-pstack actor))))
                              (push (and a b) (actor-pstack actor))
                              (incf ip)))
+                     ;;; numeric
                      (:gt (let ((b (pop (actor-pstack actor)))
                                 (a (pop (actor-pstack actor))))
                             (push (> a b) (actor-pstack actor))
@@ -125,12 +128,44 @@
                                      (mod (pop (actor-pstack actor)) div))
                                    (actor-pstack actor))
                              (incf ip)))
-                     (:gtick (progn
-                               (push (shooter-tick shooter) (actor-pstack actor))
+                     (:add (progn
+                             (push (+ (pop (actor-pstack actor))
+                                      (pop (actor-pstack actor)))
+                                   (actor-pstack actor))
+                             (incf ip)))
+                     (:sub (let ((b (pop (actor-pstack actor)))
+                                 (a (pop (actor-pstack actor))))
+                             (push (- a b) (actor-pstack actor))
+                             (incf ip)))
+                     (:mul (progn
+                             (push (* (pop (actor-pstack actor))
+                                      (pop (actor-pstack actor)))
+                                   (actor-pstack actor))
+                             (incf ip)))
+                     (:div (let ((b (pop (actor-pstack actor)))
+                                 (a (pop (actor-pstack actor))))
+                             (push (/ a b) (actor-pstack actor))
+                             (incf ip)))
+                     (:rnd (progn
+                             (push (random 1.0)
+                                   (actor-pstack actor))
+                             (incf ip)))
+                     ;;; vectors
+                     (:v/rot (let ((theta (pop (actor-pstack actor)))
+                                   (y (pop (actor-pstack actor)))
+                                   (x (pop (actor-pstack actor))))
+                                (push (- (* x (cos theta)) (* y (sin theta)))
+                                      (actor-pstack actor))
+                                (push (+ (* x (sin theta)) (* y (cos theta)))
+                                      (actor-pstack actor))
+                                (incf ip)))
+                     (:v/mul (let ((a (pop (actor-pstack actor)))
+                                   (y (pop (actor-pstack actor)))
+                                   (x (pop (actor-pstack actor))))
+                               (push (* a x) (actor-pstack actor))
+                               (push (* a y) (actor-pstack actor))
                                (incf ip)))
-                     (:atick (progn
-                               (push (actor-tick actor) (actor-pstack actor))
-                               (incf ip)))
+                     ;;; control flow
                      (:if (let* ((false-clause (pop (actor-pstack actor)))
                                  (true-clause (pop (actor-pstack actor)))
                                  (value (pop (actor-pstack actor))))
@@ -148,6 +183,7 @@
                             (push s (actor-pstack actor))
                             (setf code proc
                                   ip 0)))
+                     ;;; stack manipulation
                      (:dup (let ((a (pop (actor-pstack actor))))
                              (push a (actor-pstack actor))
                              (push a (actor-pstack actor))
@@ -185,28 +221,13 @@
                             (push (pop (actor-pstack actor))
                                   (actor-gstack actor))
                             (incf ip)))
-                     (:add (progn
-                             (push (+ (pop (actor-pstack actor))
-                                      (pop (actor-pstack actor)))
-                                   (actor-pstack actor))
-                             (incf ip)))
-                     (:sub (let ((b (pop (actor-pstack actor)))
-                                 (a (pop (actor-pstack actor))))
-                             (push (- a b) (actor-pstack actor))
-                             (incf ip)))
-                     (:mul (progn
-                             (push (* (pop (actor-pstack actor))
-                                      (pop (actor-pstack actor)))
-                                   (actor-pstack actor))
-                             (incf ip)))
-                     (:div (let ((b (pop (actor-pstack actor)))
-                                 (a (pop (actor-pstack actor))))
-                             (push (/ a b) (actor-pstack actor))
-                             (incf ip)))
-                     (:rnd (progn
-                             (push (random 1.0)
-                                   (actor-pstack actor))
-                             (incf ip)))
+                     ;;; actors
+                     (:gtick (progn
+                               (push (shooter-tick shooter) (actor-pstack actor))
+                               (incf ip)))
+                     (:atick (progn
+                               (push (actor-tick actor) (actor-pstack actor))
+                               (incf ip)))
                      (:getp (progn
                               (push (actor-x actor) (actor-pstack actor))
                               (push (actor-y actor) (actor-pstack actor))
@@ -216,20 +237,6 @@
                               (setf (actor-x actor) x
                                     (actor-y actor) y)
                               (incf ip)))
-                     (:v/rot (let ((theta (pop (actor-pstack actor)))
-                                   (y (pop (actor-pstack actor)))
-                                   (x (pop (actor-pstack actor))))
-                                (push (- (* x (cos theta)) (* y (sin theta)))
-                                      (actor-pstack actor))
-                                (push (+ (* x (sin theta)) (* y (cos theta)))
-                                      (actor-pstack actor))
-                                (incf ip)))
-                     (:v/mul (let ((a (pop (actor-pstack actor)))
-                                   (y (pop (actor-pstack actor)))
-                                   (x (pop (actor-pstack actor))))
-                               (push (* a x) (actor-pstack actor))
-                               (push (* a y) (actor-pstack actor))
-                               (incf ip)))
                      (:getv (progn
                               (push (actor-vx actor) (actor-pstack actor))
                               (push (actor-vy actor) (actor-pstack actor))
@@ -239,6 +246,7 @@
                               (setf (actor-vx actor) vx
                                     (actor-vy actor) vy)
                               (incf ip)))
+                     ;;; bullets
                      (:vanish (progn
                                 (setf (actor-used actor) nil
                                       (actor-tick actor) 0)
