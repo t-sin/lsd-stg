@@ -14,19 +14,20 @@
   (prog1 *entity-count*
     (incf *entity-count*)))
 
-(defstruct point id x y)
-(defstruct velocity id x y)
-(defstruct direction id r)
-(defstruct tick id tick)
-(defstruct otype id name)
+(defstruct actor
+  id type tick
+  x y
+  vx vy
+  rad
+  used
+  code pstack)
+
 (defstruct input id u d l r s z)
-(defstruct used id bool)
-(defstruct script id code pstack cstack)
 
 (defstruct shooter
   tick
   database
-  points vels dirs ticks types inputs used scripts)
+  actors inputs)
 
 (defun make-entity (db type &rest keys &key &allow-other-keys)
   (let* ((maker-name (intern (format nil "MAKE-~a" (symbol-name type)) :lsd))
@@ -49,8 +50,8 @@
     (unless (null components)
       (gethash entity components))))
 
-(defun eval-object-1 (shooter point vel dir tick otype input used script)
-  (let ((code (script-code script))
+(defun eval-object (shooter actor)
+  (let ((code (actor-code actor))
         (ip 0)
         (cstack ()))
     (loop
@@ -60,217 +61,199 @@
                   (case (first c)
                     (:if (setf code (second c)
                                ip (third c)
-                               (script-pstack script) (fourth c)))
+                               (actor-pstack actor) (fourth c)))
                     (:do (let ((doinfo (second c)))
                            (if (> (first doinfo) (second doinfo))
                                (setf code (third c)
                                      ip (fourth c)
-                                     (script-pstack script) (fifth c))
+                                     (actor-pstack actor) (fifth c))
                                (progn
-                                 (setf (script-pstack script) nil
+                                 (setf (actor-pstack actor) nil
                                        ip 0)
                                  (push (incf (first (second c)) (third doinfo))
-                                       (script-pstack script))
+                                       (actor-pstack actor))
                                  (push c cstack)))))
-                    (otherwise (return-from eval-object-1)))
-                  (return-from eval-object-1))))
+                    (otherwise (return-from eval-object)))
+                  (return-from eval-object))))
       :do (when (>= ip (length code))
-            (return-from eval-object-1))
+            (return-from eval-object))
       :do (let* ((c (elt code ip))
                  (inst (if (and (not (null c)) (symbolp c)) (intern (symbol-name c) :keyword) c)))
-;;            (print (list ip inst cstack) #.*standard-output*)
+            ;;            (print (list ip inst cstack) #.*standard-output*)
             (cond ((and (not (null inst)) (symbolp inst))
                    (case inst
-;;                     (:.s (print (script-pstack script) #.*standard-output*))
+                     ;;                     (:.s (print (actor-pstack actor) #.*standard-output*))
                      (:d2r (progn
-                             (push (/ (* PI (pop (script-pstack script))) 180)
-                                   (script-pstack script))
+                             (push (/ (* PI (pop (actor-pstack actor))) 180) (actor-pstack actor))
                              (incf ip)))
                      (:r2d (progn
-                             (push (/ (* 180 (pop (script-pstack script))) PI)
-                                   (script-pstack script))
+                             (push (/ (* 180 (pop (actor-pstack actor))) PI) (actor-pstack actor))
                              (incf ip)))
                      (:sin (progn
-                             (push (sin (pop (script-pstack script)))
-                                   (script-pstack script))
+                             (push (sin (pop (actor-pstack actor))) (actor-pstack actor))
                              (incf ip)))
                      (:cos (progn
-                             (push (cos (pop (script-pstack script)))
-                                   (script-pstack script))
+                             (push (cos (pop (actor-pstack actor))) (actor-pstack actor))
                              (incf ip)))
                      (:eq (progn
-                            (push (equal (pop (script-pstack script))
-                                         (pop (script-pstack script)))
-                                  (script-pstack script))
+                            (push (equal (pop (actor-pstack actor)) (pop (actor-pstack actor))) (actor-pstack actor))
                             (incf ip)))
-                     (:gt (let ((b (pop (script-pstack script)))
-                                (a (pop (script-pstack script))))
-                            (push (> a b) (script-pstack script))
+                     (:gt (let ((b (pop (actor-pstack actor)))
+                                (a (pop (actor-pstack actor))))
+                            (push (> a b) (actor-pstack actor))
                             (incf ip)))
-                     (:gte (let ((b (pop (script-pstack script)))
-                                 (a (pop (script-pstack script))))
-                            (push (>= a b) (script-pstack script))
-                            (incf ip)))
-                     (:lt (let ((b (pop (script-pstack script)))
-                                (a (pop (script-pstack script))))
-                            (push (< a b) (script-pstack script))
-                            (incf ip)))
-                     (:lte (let ((b (pop (script-pstack script)))
-                                 (a (pop (script-pstack script))))
-                            (push (<= a b) (script-pstack script))
-                            (incf ip)))
-                     (:mod (progn
-                             (push (let ((div (pop (script-pstack script))))
-                                     (mod (pop (script-pstack script)) div))
-                                   (script-pstack script))
+                     (:gte (let ((b (pop (actor-pstack actor)))
+                                 (a (pop (actor-pstack actor))))
+                             (push (>= a b) (actor-pstack actor))
                              (incf ip)))
-                     (:tick (progn
-                              (push (shooter-tick shooter) (script-pstack script))
-                              (incf ip)))
-                     (:if (let* ((false-clause (pop (script-pstack script)))
-                                 (true-clause (pop (script-pstack script)))
-                                 (value (pop (script-pstack script))))
-                            (push (list :if code (1+ ip) (script-pstack script)) cstack)
+                     (:lt (let ((b (pop (actor-pstack actor)))
+                                (a (pop (actor-pstack actor))))
+                            (push (< a b) (actor-pstack actor))
+                            (incf ip)))
+                     (:lte (let ((b (pop (actor-pstack actor)))
+                                 (a (pop (actor-pstack actor))))
+                             (push (<= a b) (actor-pstack actor))
+                             (incf ip)))
+                     (:mod (progn
+                             (push (let ((div (pop (actor-pstack actor))))
+                                     (mod (pop (actor-pstack actor)) div))
+                                   (actor-pstack actor))
+                             (incf ip)))
+                     (:gtick (progn
+                               (push (shooter-tick shooter) (actor-pstack actor))
+                               (incf ip)))
+                     (:atick (progn
+                               (push (actor-tick actor) (actor-pstack actor))
+                               (incf ip)))
+                     (:if (let* ((false-clause (pop (actor-pstack actor)))
+                                 (true-clause (pop (actor-pstack actor)))
+                                 (value (pop (actor-pstack actor))))
+                            (push (list :if code (1+ ip) (actor-pstack actor)) cstack)
                             (if value
                                 (setf code true-clause
-                                      (script-pstack script) nil
+                                      (actor-pstack actor) nil
                                       ip 0)
                                 (setf code false-clause
-                                      (script-pstack script) nil
+                                      (actor-pstack actor) nil
                                       ip 0))))
-                     (:do (let ((diff (pop (script-pstack script)))
-                                (e (pop (script-pstack script)))
-                                (s (pop (script-pstack script)))
-                                (proc (pop (script-pstack script))))
-                            (push (list :do (list s e diff) code (1+ ip) (script-pstack script)) cstack)
+                     (:do (let ((diff (pop (actor-pstack actor)))
+                                (e (pop (actor-pstack actor)))
+                                (s (pop (actor-pstack actor)))
+                                (proc (pop (actor-pstack actor))))
+                            (push (list :do (list s e diff) code (1+ ip) (actor-pstack actor)) cstack)
                             (setf code proc
-                                  (script-pstack script) (list s)
+                                  (actor-pstack actor) (list s)
                                   ip 0)))
-                     (:dup (let ((a (pop (script-pstack script))))
-                             (push a (script-pstack script))
-                             (push a (script-pstack script))
+                     (:dup (let ((a (pop (actor-pstack actor))))
+                             (push a (actor-pstack actor))
+                             (push a (actor-pstack actor))
                              (incf ip)))
-                     (:swap (let ((a (pop (script-pstack script)))
-                                  (b (pop (script-pstack script))))
-                              (push a (script-pstack script))
-                              (push b (script-pstack script))
+                     (:swap (let ((a (pop (actor-pstack actor)))
+                                  (b (pop (actor-pstack actor))))
+                              (push a (actor-pstack actor))
+                              (push b (actor-pstack actor))
                               (incf ip)))
                      (:add (progn
-                             (push (+ (pop (script-pstack script))
-                                      (pop (script-pstack script)))
-                                   (script-pstack script))
+                             (push (+ (pop (actor-pstack actor))
+                                      (pop (actor-pstack actor)))
+                                   (actor-pstack actor))
                              (incf ip)))
-                     (:sub (let ((b (pop (script-pstack script)))
-                                 (a (pop (script-pstack script))))
-                             (push (- a b) (script-pstack script))
+                     (:sub (let ((b (pop (actor-pstack actor)))
+                                 (a (pop (actor-pstack actor))))
+                             (push (- a b) (actor-pstack actor))
                              (incf ip)))
                      (:mul (progn
-                             (push (* (pop (script-pstack script))
-                                      (pop (script-pstack script)))
-                                   (script-pstack script))
+                             (push (* (pop (actor-pstack actor))
+                                      (pop (actor-pstack actor)))
+                                   (actor-pstack actor))
                              (incf ip)))
-                     (:div (let ((b (pop (script-pstack script)))
-                                 (a (pop (script-pstack script))))
-                             (push (/ a b) (script-pstack script))
+                     (:div (let ((b (pop (actor-pstack actor)))
+                                 (a (pop (actor-pstack actor))))
+                             (push (/ a b) (actor-pstack actor))
                              (incf ip)))
                      (:rnd (progn
                              (push (random 1.0)
-                                   (script-pstack script))
+                                   (actor-pstack actor))
                              (incf ip)))
                      (:getp (progn
-                              (push (point-x point) (script-pstack script))
-                              (push (point-y point) (script-pstack script))
+                              (push (actor-x actor) (actor-pstack actor))
+                              (push (actor-y actor) (actor-pstack actor))
                               (incf ip)))
-                     (:setp (let ((y (pop (script-pstack script)))
-                                  (x (pop (script-pstack script))))
-                              (setf (point-x point) x
-                                    (point-y point) y)
+                     (:setp (let ((y (pop (actor-pstack actor)))
+                                  (x (pop (actor-pstack actor))))
+                              (setf (actor-x actor) x
+                                    (actor-y actor) y)
                               (incf ip)))
                      (:getv (progn
-                              (push (velocity-x vel) (script-pstack script))
-                              (push (velocity-y vel) (script-pstack script))
+                              (push (actor-vx actor) (actor-pstack actor))
+                              (push (actor-vy actor) (actor-pstack actor))
                               (incf ip)))
-                     (:setv (let ((vx (pop (script-pstack script)))
-                                  (vy (pop (script-pstack script))))
-                              (setf (velocity-x vel) vx
-                                    (velocity-y vel) vy)
+                     (:setv (let ((vx (pop (actor-pstack actor)))
+                                  (vy (pop (actor-pstack actor))))
+                              (setf (actor-vx actor) vx
+                                    (actor-vy actor) vy)
                               (incf ip)))
-                     (:shot (let ((u (find nil (shooter-used shooter) :key #'used-bool)))
-                              (when u
-                                (let* ((id (used-id u))
-                                       (p (get-component shooter id :point))
-                                       (v (get-component shooter id :velocity))
-                                       (s (get-component shooter id :script))
-                                       (vy (pop (script-pstack script)))
-                                       (vx (pop (script-pstack script)))
-                                       (code (pop (script-pstack script))))
-                                  (setf (used-bool u) t)
-                                  (setf (point-x p) (point-x point)
-                                        (point-y p) (point-y point))
-                                  (setf (velocity-x v) vx
-                                        (velocity-y v) vy)
-                                  (setf (script-code s) code
-                                        (script-pstack s) nil)))
+                     (:vanish (progn
+                                (setf (actor-used actor) nil
+                                      (actor-tick actor) 0)
+                                (incf ip)))
+                     (:shot (let ((b (find nil (shooter-actors shooter) :key #'actor-used)))
+                              (when b
+                                (let ((vy (pop (actor-pstack actor)))
+                                      (vx (pop (actor-pstack actor)))
+                                      (code (pop (actor-pstack actor))))
+                                  (setf (actor-used b) t
+                                        (actor-tick actor) 0)
+                                  (setf (actor-x b) (actor-x actor)
+                                        (actor-y b) (actor-y actor))
+                                  (setf (actor-vx b) vx
+                                        (actor-vy b) vy)
+                                  (setf (actor-code b) code
+                                        (actor-pstack actor) b) nil))
                               (incf ip)))))
-                  (t (push inst (script-pstack script))
+                  (t (push inst (actor-pstack actor))
                      (incf ip)))))))
 
 (defun init-shooter ()
-  (let ((points ())
-        (vels ())
-        (dirs ())
-        (ticks ())
-        (types ())
+  (let ((actors ())
         (inputs ())
-        (scripts ())
-        (used ())
         (db (make-hash-table)))
     (flet ((make-player ()
              (let ((id (make-entity-id)))
-               (push (make-entity db :otype :id id :name :player) types)
-               (push (make-entity db :used :id id :bool t) used)
-               (push (make-entity db :point :id id :x 400 :y 400) points)
-               (push (make-entity db :direction :id id :r 0) dirs)
-               (push (make-entity db :input :id id :u nil :d nil :l nil :r nil :z nil) inputs)
-               (push (make-entity db :script :id id :code () :pstack ()) scripts)))
+               (push (make-entity db :actor
+                                  :id id :type :player :tick 0 :used t
+                                  :x 400 :y 400 :vx 0 :vy 0
+                                  :rad 0
+                                  :code () :pstack ())
+                     actors)
+               (push (make-entity db :input :id id :u nil :d nil :l nil :r nil :z nil) inputs)))
            (make-enemy ()
              (let* ((id (make-entity-id))
-                    (bullet-code '(getv 0.985 mul swap 0.985 mul setv))
-                    (code `(tick 10 mod 0 eq ((,bullet-code swap dup d2r cos 10 mul swap d2r sin 10 mul shot) 0 360 10 do) () if)))
-               (push (make-entity db :otype :id id :name :enemy) types)
-               (push (make-entity db :tick :id id :tick -1) ticks)
-               (push (make-entity db :used :id id :bool t) used)
-               (push (make-entity db :point :id id :x 400 :y 200) points)
-               (push (make-entity db :direction :id id :r 0) dirs)
-               (push (make-entity db :script :id id :code code :pstack (0)) scripts)))
+                    (bullet-code `(atick 50 gte (vanish) () if getv 0.97 mul swap 0.97 mul setv))
+                    (code `(atick 10 mod 0 eq
+                                  ((,bullet-code swap dup d2r cos 10 mul swap d2r sin 10 mul shot) 0 360 10 do)
+                                  () if)))
+               (push (make-entity db :actor
+                                  :id id :type :enemy :tick 0 :used t
+                                  :x 400 :y 200 :vx 0 :vy 0
+                                  :rad 0
+                                  :code code :pstack ())
+                     actors)))
            (make-bullet ()
              (let ((id (make-entity-id)))
-               (push (make-entity db :otype :id id :name :bullet) types)
-               (push (make-entity db :tick :id id :tick -1) ticks)
-               (push (make-entity db :used :id id :bool nil) used)
-               (push (make-entity db :point :id id
-                                  :x (random 800)
-                                  :y (random 600))
-                     points)
-               (push (make-entity db :velocity :id id
-                                  :x (- (random 10) 5)
-                                  :y (- (random 10) 5))
-                     vels)
-               (push (make-entity db :direction :id id :r 0) dirs)
-               (push (make-entity db :script :id id :code () :pstack ()) scripts))))
+               (push (make-entity db :actor
+                                  :id id :type :bullet :tick 0 :used nil
+                                  :x 0 :y 0 :vx 0 :vy 0
+                                  :rad 0
+                                  :code () :pstack ())
+                     actors))))
       (make-player)
       (make-enemy)
-      (loop :for _ :from 0 :upto 1000 :do (make-bullet))
+      (loop :for _ :from 0 :upto 2000 :do (make-bullet))
       (make-shooter :tick 0
                     :database db
-                    :points (coerce points 'vector)
-                    :vels (coerce vels 'vector)
-                    :dirs (coerce dirs 'vector)
-                    :ticks (coerce ticks 'vector)
-                    :types (coerce types 'vector)
-                    :inputs (coerce inputs 'vector)
-                    :scripts (coerce scripts 'vector)
-                    :used (coerce used 'vector)))))
+                    :actors (coerce actors 'vector)
+                    :inputs (coerce inputs 'vector)))))
 
 (defun update-inputs (shooter &key (u nil u?) (d nil d?) (l nil l?) (r nil r?) (s nil s?) (z nil z?))
   (loop
@@ -284,46 +267,42 @@
           (when z? (setf (input-z i) z)))))
 
 (defun move-player (shooter)
-  (let* ((player (find :player (shooter-types shooter) :key #'otype-name))
-         (p (get-component shooter (otype-id player) :point))
-         (i (get-component shooter (otype-id player) :input)))
+  (let* ((p (find :player (shooter-actors shooter) :key #'actor-type))
+         (i (get-component shooter (actor-id p) :input)))
     (let ((move (if (input-s i) 3 5)))
-      (when (input-u i) (incf (point-y p) (- move)))
-      (when (input-d i) (incf (point-y p) move))
-      (when (input-l i) (incf (point-x p) (- move)))
-      (when (input-r i) (incf (point-x p) move)))))
+      (when (input-u i) (incf (actor-y p) (- move)))
+      (when (input-d i) (incf (actor-y p) move))
+      (when (input-l i) (incf (actor-x p) (- move)))
+      (when (input-r i) (incf (actor-x p) move)))))
 
-(defun move-points (shooter)
+(defun move-actors (shooter)
   (loop
-    :for p :across (shooter-points shooter)
-    :do (let ((v (get-component shooter (point-id p) :velocity)))
-          (unless (null v)
-            (setf (point-x p) (+ (point-x p) (velocity-x v))
-                  (point-y p) (+ (point-y p) (velocity-y v)))))))
+    :for a :across (shooter-actors shooter)
+    :do (when (actor-used a)
+          (setf (actor-x a) (+ (actor-x a) (actor-vx a))
+                (actor-y a) (+ (actor-y a) (actor-vy a))))))
 
-(defun draw-points (shooter renderer)
+(defun draw-actors (shooter renderer)
   (sdl2:set-render-draw-color renderer 255 255 255 255)
   (loop
-    :for p :across (shooter-points shooter)
-    :when (let ((used (get-component shooter (point-id p) :used)))
-            (and (not (null used)) (used-bool used)))
+    :for a :across (shooter-actors shooter)
+    :when (actor-used a)
     :do (sdl2:render-draw-rect renderer
-                               (sdl2:make-rect (- (floor (point-x p)) 3)
-                                               (- (floor (point-y p)) 3)
+                               (sdl2:make-rect (- (floor (actor-x a)) 3)
+                                               (- (floor (actor-y a)) 3)
                                                6 6))))
+
+(defun update-ticks (shooter)
+  (loop
+    :for a :across (shooter-actors shooter)
+    :when (actor-used a)
+    :do (incf (actor-tick a))))
 
 (defun eval-objects (shooter)
   (loop
-    :for u :across (shooter-used shooter)
-    :for id := (used-id u)
-    :for p := (get-component shooter id :point)
-    :for v := (get-component shooter id :velocity)
-    :for d := (get-component shooter id :direction)
-    :for tick := (get-component shooter id :tick)
-    :for type := (get-component shooter id :otype)
-    :for input := (get-component shooter id :input)
-    :for script := (get-component shooter id :script)
-    :do (eval-object-1 shooter p v d tick type input u script)))
+    :for a :across (shooter-actors shooter)
+    :for input := (get-component shooter (actor-id a) :input)
+    :do (eval-object shooter a)))
 
 (defun main ()
   (sdl2:with-init (:everything)
@@ -366,10 +345,11 @@
              (sdl2:set-render-draw-color renderer 40 40 40 255)
              (sdl2:render-fill-rect renderer screen-rect)
 
-             (draw-points shooter renderer)
-             (move-points shooter)
+             (draw-actors shooter renderer)
+             (move-actors shooter)
              (move-player shooter)
              (eval-objects shooter)
+             (update-ticks shooter)
 
              (incf (shooter-tick shooter))
              (sdl2:render-present renderer)
