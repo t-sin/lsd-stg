@@ -252,6 +252,21 @@
                   (t (push inst (actor-pstack actor))
                      (incf ip)))))))
 
+(let* ((bullet-code `(atick 60 gte
+                            ((getp swap drop dup -50 lt swap 610 gt or (vanish) () if
+                                   getp drop dup -50 lt swap 810 gt or (vanish) () if)
+                             getv 90 >rad v/rot 3 v/mul shot vanish)
+                            () if
+                            getv 0.965 mul swap 0.965 mul setv))
+       (code `(<<g nil eq (0 0 >g) () if
+                   atick 5 mod 0 eq
+                   (((getp swap drop dup -50 lt swap 610 gt or (vanish) () if
+                           getp drop dup -50 lt swap 810 gt or (vanish) () if)
+                     swap dup >rad cos 5 mul swap >rad sin 5 mul shot)
+                    <<g <<g 360 add 40 do <g 3.5 add >g)
+                   () if)))
+  (defparameter *enemy-code* code))
+
 (defun init-shooter ()
   (let ((actors ())
         (inputs ())
@@ -266,23 +281,12 @@
                      actors)
                (push (make-entity db :input :id id :u nil :d nil :l nil :r nil :z nil) inputs)))
            (make-enemy ()
-             (let* ((id (make-entity-id))
-                    (bullet-code `(atick 60 gte
-                                         ((getp swap drop dup -50 lt swap 610 gt or (vanish) () if
-                                                getp drop dup -50 lt swap 810 gt or (vanish) () if)
-                                          getv 90 >rad v/rot 3 v/mul shot vanish)
-                                         () if
-                                        getv 0.965 mul swap 0.965 mul setv))
-                    (code `(<<g nil eq (0 >g) () if
-                                atick 10 mod 0 eq
-                                ((,bullet-code swap dup >rad cos 8 mul swap >rad sin 8 mul shot)
-                                 <<g <<g 360 add 10 do <g 7 add >g)
-                                () if)))
+             (let ((id (make-entity-id)))
                (push (make-entity db :actor
                                   :id id :type :enemy :tick 0 :used t
                                   :x 400 :y 200 :vx 0 :vy 0
                                   :rad 0
-                                  :code code :pstack () :gstack ())
+                                  :code *enemy-code* :pstack () :gstack ())
                      actors)))
            (make-bullet ()
              (let ((id (make-entity-id)))
