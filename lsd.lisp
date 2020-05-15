@@ -274,11 +274,11 @@
                ;;  <<g <<g 360 add 40 do
                ;; () if
                atick 0 eq
-               ((<<g nil eq (0 1 >g) () if
-                     <<g >rad cos 100 mul 400 add
-                     <<g >rad sin 100 mul 300 add
+               ((<<g nil eq (1 0 >g >g) () if
+                     <g <g over over swap >g >g swap >rad cos swap mul 400 add
+                     <g <g over over swap >g >g swap >rad sin swap mul 300 add
                      setp
-                     <g 3 add >g)
+                     <g <g swap 3 add swap dup 100 gte () (2 add) if swap >g >g)
                 0 0 shot)
                () if
                ;;<g 3.5 add >g
