@@ -60,13 +60,11 @@
               (if (listp c)
                   (case (first c)
                     (:if (setf code (second c)
-                               ip (third c)
-                               (actor-pstack actor) (fourth c)))
+                               ip (third c)))
                     (:do (let ((doinfo (second c)))
                            (if (> (first doinfo) (second doinfo))
                                (setf code (third c)
-                                     ip (fourth c)
-                                     (actor-pstack actor) (fifth c))
+                                     ip (fourth c))
                                (progn
                                  (setf (actor-pstack actor) nil
                                        ip 0)
@@ -136,21 +134,19 @@
                      (:if (let* ((false-clause (pop (actor-pstack actor)))
                                  (true-clause (pop (actor-pstack actor)))
                                  (value (pop (actor-pstack actor))))
-                            (push (list :if code (1+ ip) (actor-pstack actor)) cstack)
+                            (push (list :if code (1+ ip)) cstack)
                             (if value
                                 (setf code true-clause
-                                      (actor-pstack actor) nil
                                       ip 0)
                                 (setf code false-clause
-                                      (actor-pstack actor) nil
                                       ip 0))))
                      (:do (let ((diff (pop (actor-pstack actor)))
                                 (e (pop (actor-pstack actor)))
                                 (s (pop (actor-pstack actor)))
                                 (proc (pop (actor-pstack actor))))
-                            (push (list :do (list s e diff) code (1+ ip) (actor-pstack actor)) cstack)
+                            (push (list :do (list s e diff) code (1+ ip)) cstack)
+                            (push s (actor-pstack actor))
                             (setf code proc
-                                  (actor-pstack actor) (list s)
                                   ip 0)))
                      (:dup (let ((a (pop (actor-pstack actor))))
                              (push a (actor-pstack actor))
@@ -255,13 +251,12 @@
 (let* ((bullet-code `(atick 60 gte
                             ((getp swap drop dup -50 lt swap 610 gt or (vanish) () if
                                    getp drop dup -50 lt swap 810 gt or (vanish) () if)
-                             getv 90 >rad v/rot 3 v/mul shot vanish)
+                             getv 90 >rad v/rot 4 v/mul shot vanish)
                             () if
                             getv 0.965 mul swap 0.965 mul setv))
        (code `(<<g nil eq (0 0 >g) () if
                    atick 5 mod 0 eq
-                   (((getp swap drop dup -50 lt swap 610 gt or (vanish) () if
-                           getp drop dup -50 lt swap 810 gt or (vanish) () if)
+                   ((,bullet-code
                      swap dup >rad cos 5 mul swap >rad sin 5 mul shot)
                     <<g <<g 360 add 40 do <g 3.5 add >g)
                    () if)))
