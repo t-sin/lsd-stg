@@ -20,7 +20,7 @@
   vx vy
   rad
   used
-  code pstack)
+  code pstack gstack)
 
 (defstruct input id u d l r s z)
 
@@ -82,7 +82,7 @@
             ;;            (print (list ip inst cstack) #.*standard-output*)
             (cond ((and (not (null inst)) (symbolp inst))
                    (case inst
-                     ;;                     (:.s (print (actor-pstack actor) #.*standard-output*))
+                     ;;(:.s (print (actor-pstack actor) #.*standard-output*))
                      (:d2r (progn
                              (push (/ (* PI (pop (actor-pstack actor))) 180) (actor-pstack actor))
                              (incf ip)))
@@ -153,6 +153,18 @@
                               (push a (actor-pstack actor))
                               (push b (actor-pstack actor))
                               (incf ip)))
+                     (:<g (progn
+                            (push (pop (actor-gstack actor))
+                                  (actor-pstack actor))
+                            (incf ip)))
+                     (:<<g (let ((a (pop (actor-gstack actor))))
+                             (push a (actor-gstack actor))
+                             (push a (actor-pstack actor))
+                             (incf ip)))
+                     (:>g (progn
+                            (push (pop (actor-pstack actor))
+                                  (actor-gstack actor))
+                            (incf ip)))
                      (:add (progn
                              (push (+ (pop (actor-pstack actor))
                                       (pop (actor-pstack actor)))
@@ -184,6 +196,14 @@
                               (setf (actor-x actor) x
                                     (actor-y actor) y)
                               (incf ip)))
+                     (:vecrot (let ((theta (pop (actor-pstack actor)))
+                                    (y (pop (actor-pstack actor)))
+                                    (x (pop (actor-pstack actor))))
+                                (push (- (* x (cos theta)) (* y (sin theta)))
+                                      (actor-pstack actor))
+                                (push (+ (* x (sin theta)) (* y (cos theta)))
+                                      (actor-pstack actor))
+                                (incf ip)))
                      (:getv (progn
                               (push (actor-vx actor) (actor-pstack actor))
                               (push (actor-vy actor) (actor-pstack actor))
@@ -209,7 +229,8 @@
                                   (setf (actor-vx b) vx
                                         (actor-vy b) vy)
                                   (setf (actor-code b) code
-                                        (actor-pstack actor) b) nil))
+                                        (actor-pstack b) nil
+                                        (actor-gstack b) nil)))
                               (incf ip)))))
                   (t (push inst (actor-pstack actor))
                      (incf ip)))))))
@@ -224,20 +245,25 @@
                                   :id id :type :player :tick 0 :used t
                                   :x 400 :y 400 :vx 0 :vy 0
                                   :rad 0
-                                  :code () :pstack ())
+                                  :code () :pstack () :gstack ())
                      actors)
                (push (make-entity db :input :id id :u nil :d nil :l nil :r nil :z nil) inputs)))
            (make-enemy ()
              (let* ((id (make-entity-id))
-                    (bullet-code `(atick 50 gte (vanish) () if getv 0.97 mul swap 0.97 mul setv))
-                    (code `(atick 10 mod 0 eq
-                                  ((,bullet-code swap dup d2r cos 10 mul swap d2r sin 10 mul shot) 0 360 10 do)
-                                  () if)))
+                    (bullet-code `(atick 50 gte
+                                         (() getv 90 vecrot shot vanish)
+                                         () if
+                                         getv 0.97 mul swap 0.97 mul setv))
+                    (code `(<<g nil eq (0 >g) () if
+                                atick 10 mod 0 eq
+                                ((,bullet-code swap dup d2r cos 10 mul swap d2r sin 10 mul shot)
+                                 <<g <<g 360 add 10 do <g 7 add >g)
+                                () if)))
                (push (make-entity db :actor
                                   :id id :type :enemy :tick 0 :used t
                                   :x 400 :y 200 :vx 0 :vy 0
                                   :rad 0
-                                  :code code :pstack ())
+                                  :code code :pstack () :gstack ())
                      actors)))
            (make-bullet ()
              (let ((id (make-entity-id)))
@@ -245,7 +271,7 @@
                                   :id id :type :bullet :tick 0 :used nil
                                   :x 0 :y 0 :vx 0 :vy 0
                                   :rad 0
-                                  :code () :pstack ())
+                                  :code () :pstack () :gstack ())
                      actors))))
       (make-player)
       (make-enemy)
