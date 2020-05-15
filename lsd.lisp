@@ -84,11 +84,11 @@
                    (case inst
                      ;;(:.s (print (actor-pstack actor) #.*standard-output*))
                      (:>rad (progn
-                             (push (/ (* PI (pop (actor-pstack actor))) 180) (actor-pstack actor))
-                             (incf ip)))
+                              (push (/ (* PI (pop (actor-pstack actor))) 180) (actor-pstack actor))
+                              (incf ip)))
                      (:>deg (progn
-                             (push (/ (* 180 (pop (actor-pstack actor))) PI) (actor-pstack actor))
-                             (incf ip)))
+                              (push (/ (* 180 (pop (actor-pstack actor))) PI) (actor-pstack actor))
+                              (incf ip)))
                      (:sin (progn
                              (push (sin (pop (actor-pstack actor))) (actor-pstack actor))
                              (incf ip)))
@@ -104,8 +104,8 @@
                             (incf ip)))
                      (:and (let ((b (pop (actor-pstack actor)))
                                  (a (pop (actor-pstack actor))))
-                            (push (and a b) (actor-pstack actor))
-                            (incf ip)))
+                             (push (and a b) (actor-pstack actor))
+                             (incf ip)))
                      (:gt (let ((b (pop (actor-pstack actor)))
                                 (a (pop (actor-pstack actor))))
                             (push (> a b) (actor-pstack actor))
