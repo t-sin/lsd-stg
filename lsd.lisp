@@ -268,6 +268,8 @@
                               (when b
                                 (let ((vy (pop (actor-pstack actor)))
                                       (vx (pop (actor-pstack actor)))
+                                      (gargs (pop (actor-pstack actor)))
+                                      (args (pop (actor-pstack actor)))
                                       (code (pop (actor-pstack actor))))
                                   (setf (actor-used b) t
                                         (actor-tick actor) 0)
@@ -276,8 +278,8 @@
                                   (setf (actor-vx b) vx
                                         (actor-vy b) vy)
                                   (setf (actor-code b) code
-                                        (actor-pstack b) nil
-                                        (actor-gstack b) nil)))
+                                        (actor-pstack b) (reverse args)
+                                        (actor-gstack b) (reverse gargs))))
                               (incf ip)))))
                   (t (push inst (actor-pstack actor))
                      (incf ip)))))))
