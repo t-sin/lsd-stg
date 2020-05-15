@@ -150,6 +150,19 @@
                              (push (random 1.0)
                                    (actor-pstack actor))
                              (incf ip)))
+                     ;;; lists
+                     (:cons (let ((b (pop (actor-pstack actor)))
+                                  (a (pop (actor-pstack actor))))
+                              (push (cons a b) (actor-pstack actor))
+                              (incf ip)))
+                     (:car (progn
+                             (push (car (pop (actor-pstack actor)))
+                                   (actor-pstack actor))
+                             (incf ip)))
+                     (:cdr (progn
+                             (push (cdr (pop (actor-pstack actor)))
+                                   (actor-pstack actor))
+                             (incf ip)))
                      ;;; vectors
                      (:v/rot (let ((theta (pop (actor-pstack actor)))
                                    (y (pop (actor-pstack actor)))
