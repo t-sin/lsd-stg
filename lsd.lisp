@@ -1,128 +1,403 @@
 (defpackage #:lsd
   (:use #:cl)
-  (:import-from #:cl-glfw3
-                #:with-init-window
-                #:def-key-callback
-                #:get-proc-address
-                #:set-key-callback
-                #:set-window-should-close
-                #:window-should-close-p
-                #:swap-buffers
-                #:poll-events)
   (:export #:main))
 (in-package #:lsd)
 
-(defparameter *context*
+(defparameter *game*
   (list :title "Lazy Sweet Dream"
         :version (asdf:component-version (asdf:find-system :lsd))
         :width 800
         :height 600))
 
-(def-key-callback quit-on-escape (window key scancode action mod-keys)
-  (declare (ignore window scancode mod-keys))
-  (when (and (eq key :escape) (eq action :press))
-    (set-window-should-close)))
+(defparameter *entity-count* 0)
+(defun make-entity-id ()
+  (prog1 *entity-count*
+    (incf *entity-count*)))
 
-;;; shader functions
+(defstruct actor
+  id type tick
+  x y
+  vx vy
+  rad
+  used
+  code pstack gstack)
 
-(defun make-shader (type in-args uniforms code)
-  (varjo:translate (varjo:make-stage type in-args uniforms '(:400) code)))
+(defstruct input id u d l r s z)
 
-(defun make-shader-object (shader)
-  (let* ((type (intern (format nil "~a-SHADER" (symbol-name (varjo:stage-kind shader))) :keyword))
-         (so (gl:create-shader type)))
-    (gl:shader-source so (varjo:glsl-code shader))
-    (gl:compile-shader so)
-    (let ((errstr (gl:get-shader-info-log so)))
-      (unless (string= errstr "")
-        (error errstr)))
-    so))
+(defstruct shooter
+  tick
+  database
+  actors inputs)
 
-(defun make-program (shaders)
-  (let* ((program (gl:create-program))
-         (shaderobjs (loop
-                       :for s :in shaders
-                       :collect (let ((so (make-shader-object s)))
-                                  (gl:attach-shader program so)
-                                  so))))
-    (values program shaderobjs)))
+(defun make-entity (db type &rest keys &key &allow-other-keys)
+  (let* ((maker-name (intern (format nil "MAKE-~a" (symbol-name type)) :lsd))
+         (maker (symbol-function maker-name))
+         (id-name (intern (format nil "~a-ID" (symbol-name type)) :lsd))
+         (getter-id (symbol-function id-name))
+         (entity (apply maker keys))
+         (type (type-of entity)))
+    (let ((table (gethash type db)))
+      (when (null table)
+        (let ((new-table (make-hash-table)))
+          (setf (gethash type db) new-table
+                table new-table)))
+      (setf (gethash (funcall getter-id entity) table) entity))
+    entity))
 
+(defun get-component (shooter entity ctype)
+  (let* ((db (shooter-database shooter))
+         (components (gethash (intern (symbol-name ctype) :lsd) db)))
+    (unless (null components)
+      (gethash entity components))))
 
-;; vertex functions
-
-(defun make-gl-array (seq type)
-  (let ((arr (gl:alloc-gl-array type (length seq))))
+(defun eval-object (shooter actor)
+  (let ((code (actor-code actor))
+        (ip 0)
+        (cstack ()))
     (loop
-      :for n :from 0 :below (length seq)
-      :do (setf (gl:glaref arr n) (elt seq n)))
-    arr))
+      :do (when (>= ip (length code))
+            (let ((c (pop cstack)))
+              (if (listp c)
+                  (case (first c)
+                    (:if (setf code (second c)
+                               ip (third c)
+                               (actor-pstack actor) (fourth c)))
+                    (:do (let ((doinfo (second c)))
+                           (if (> (first doinfo) (second doinfo))
+                               (setf code (third c)
+                                     ip (fourth c)
+                                     (actor-pstack actor) (fifth c))
+                               (progn
+                                 (setf (actor-pstack actor) nil
+                                       ip 0)
+                                 (push (incf (first (second c)) (third doinfo))
+                                       (actor-pstack actor))
+                                 (push c cstack)))))
+                    (otherwise (return-from eval-object)))
+                  (return-from eval-object))))
+      :do (when (>= ip (length code))
+            (return-from eval-object))
+      :do (let* ((c (elt code ip))
+                 (inst (if (and (not (null c)) (symbolp c)) (intern (symbol-name c) :keyword) c)))
+            ;;            (print (list ip inst cstack) #.*standard-output*)
+            (cond ((and (not (null inst)) (symbolp inst))
+                   (case inst
+                     ;;(:.s (print (actor-pstack actor) #.*standard-output*))
+                     (:>rad (progn
+                              (push (/ (* PI (pop (actor-pstack actor))) 180) (actor-pstack actor))
+                              (incf ip)))
+                     (:>deg (progn
+                              (push (/ (* 180 (pop (actor-pstack actor))) PI) (actor-pstack actor))
+                              (incf ip)))
+                     (:sin (progn
+                             (push (sin (pop (actor-pstack actor))) (actor-pstack actor))
+                             (incf ip)))
+                     (:cos (progn
+                             (push (cos (pop (actor-pstack actor))) (actor-pstack actor))
+                             (incf ip)))
+                     (:eq (progn
+                            (push (equal (pop (actor-pstack actor)) (pop (actor-pstack actor))) (actor-pstack actor))
+                            (incf ip)))
+                     (:or (let ((b (pop (actor-pstack actor)))
+                                (a (pop (actor-pstack actor))))
+                            (push (or a b) (actor-pstack actor))
+                            (incf ip)))
+                     (:and (let ((b (pop (actor-pstack actor)))
+                                 (a (pop (actor-pstack actor))))
+                             (push (and a b) (actor-pstack actor))
+                             (incf ip)))
+                     (:gt (let ((b (pop (actor-pstack actor)))
+                                (a (pop (actor-pstack actor))))
+                            (push (> a b) (actor-pstack actor))
+                            (incf ip)))
+                     (:gte (let ((b (pop (actor-pstack actor)))
+                                 (a (pop (actor-pstack actor))))
+                             (push (>= a b) (actor-pstack actor))
+                             (incf ip)))
+                     (:lt (let ((b (pop (actor-pstack actor)))
+                                (a (pop (actor-pstack actor))))
+                            (push (< a b) (actor-pstack actor))
+                            (incf ip)))
+                     (:lte (let ((b (pop (actor-pstack actor)))
+                                 (a (pop (actor-pstack actor))))
+                             (push (<= a b) (actor-pstack actor))
+                             (incf ip)))
+                     (:mod (progn
+                             (push (let ((div (pop (actor-pstack actor))))
+                                     (mod (pop (actor-pstack actor)) div))
+                                   (actor-pstack actor))
+                             (incf ip)))
+                     (:gtick (progn
+                               (push (shooter-tick shooter) (actor-pstack actor))
+                               (incf ip)))
+                     (:atick (progn
+                               (push (actor-tick actor) (actor-pstack actor))
+                               (incf ip)))
+                     (:if (let* ((false-clause (pop (actor-pstack actor)))
+                                 (true-clause (pop (actor-pstack actor)))
+                                 (value (pop (actor-pstack actor))))
+                            (push (list :if code (1+ ip) (actor-pstack actor)) cstack)
+                            (if value
+                                (setf code true-clause
+                                      (actor-pstack actor) nil
+                                      ip 0)
+                                (setf code false-clause
+                                      (actor-pstack actor) nil
+                                      ip 0))))
+                     (:do (let ((diff (pop (actor-pstack actor)))
+                                (e (pop (actor-pstack actor)))
+                                (s (pop (actor-pstack actor)))
+                                (proc (pop (actor-pstack actor))))
+                            (push (list :do (list s e diff) code (1+ ip) (actor-pstack actor)) cstack)
+                            (setf code proc
+                                  (actor-pstack actor) (list s)
+                                  ip 0)))
+                     (:dup (let ((a (pop (actor-pstack actor))))
+                             (push a (actor-pstack actor))
+                             (push a (actor-pstack actor))
+                             (incf ip)))
+                     (:drop (progn
+                              (pop (actor-pstack actor))
+                              (incf ip)))
+                     (:swap (let ((a (pop (actor-pstack actor)))
+                                  (b (pop (actor-pstack actor))))
+                              (push a (actor-pstack actor))
+                              (push b (actor-pstack actor))
+                              (incf ip)))
+                     (:<g (progn
+                            (push (pop (actor-gstack actor))
+                                  (actor-pstack actor))
+                            (incf ip)))
+                     (:<<g (let ((a (pop (actor-gstack actor))))
+                             (push a (actor-gstack actor))
+                             (push a (actor-pstack actor))
+                             (incf ip)))
+                     (:>g (progn
+                            (push (pop (actor-pstack actor))
+                                  (actor-gstack actor))
+                            (incf ip)))
+                     (:add (progn
+                             (push (+ (pop (actor-pstack actor))
+                                      (pop (actor-pstack actor)))
+                                   (actor-pstack actor))
+                             (incf ip)))
+                     (:sub (let ((b (pop (actor-pstack actor)))
+                                 (a (pop (actor-pstack actor))))
+                             (push (- a b) (actor-pstack actor))
+                             (incf ip)))
+                     (:mul (progn
+                             (push (* (pop (actor-pstack actor))
+                                      (pop (actor-pstack actor)))
+                                   (actor-pstack actor))
+                             (incf ip)))
+                     (:div (let ((b (pop (actor-pstack actor)))
+                                 (a (pop (actor-pstack actor))))
+                             (push (/ a b) (actor-pstack actor))
+                             (incf ip)))
+                     (:rnd (progn
+                             (push (random 1.0)
+                                   (actor-pstack actor))
+                             (incf ip)))
+                     (:getp (progn
+                              (push (actor-x actor) (actor-pstack actor))
+                              (push (actor-y actor) (actor-pstack actor))
+                              (incf ip)))
+                     (:setp (let ((y (pop (actor-pstack actor)))
+                                  (x (pop (actor-pstack actor))))
+                              (setf (actor-x actor) x
+                                    (actor-y actor) y)
+                              (incf ip)))
+                     (:v/rot (let ((theta (pop (actor-pstack actor)))
+                                   (y (pop (actor-pstack actor)))
+                                   (x (pop (actor-pstack actor))))
+                                (push (- (* x (cos theta)) (* y (sin theta)))
+                                      (actor-pstack actor))
+                                (push (+ (* x (sin theta)) (* y (cos theta)))
+                                      (actor-pstack actor))
+                                (incf ip)))
+                     (:v/mul (let ((a (pop (actor-pstack actor)))
+                                   (y (pop (actor-pstack actor)))
+                                   (x (pop (actor-pstack actor))))
+                               (push (* a x) (actor-pstack actor))
+                               (push (* a y) (actor-pstack actor))
+                               (incf ip)))
+                     (:getv (progn
+                              (push (actor-vx actor) (actor-pstack actor))
+                              (push (actor-vy actor) (actor-pstack actor))
+                              (incf ip)))
+                     (:setv (let ((vx (pop (actor-pstack actor)))
+                                  (vy (pop (actor-pstack actor))))
+                              (setf (actor-vx actor) vx
+                                    (actor-vy actor) vy)
+                              (incf ip)))
+                     (:vanish (progn
+                                (setf (actor-used actor) nil
+                                      (actor-tick actor) 0)
+                                (incf ip)))
+                     (:shot (let ((b (find nil (shooter-actors shooter) :key #'actor-used)))
+                              (when b
+                                (let ((vy (pop (actor-pstack actor)))
+                                      (vx (pop (actor-pstack actor)))
+                                      (code (pop (actor-pstack actor))))
+                                  (setf (actor-used b) t
+                                        (actor-tick actor) 0)
+                                  (setf (actor-x b) (actor-x actor)
+                                        (actor-y b) (actor-y actor))
+                                  (setf (actor-vx b) vx
+                                        (actor-vy b) vy)
+                                  (setf (actor-code b) code
+                                        (actor-pstack b) nil
+                                        (actor-gstack b) nil)))
+                              (incf ip)))))
+                  (t (push inst (actor-pstack actor))
+                     (incf ip)))))))
 
-(defmacro with-framebuffer ((&optional fbuffer) &body body)
-  `(progn
-     (when ,fbuffer (gl:bind-framebuffer :framebuffer fbuffer))
-     ,@body
-     (when ,fbuffer (gl:bind-framebuffer :framebuffer 0))))
+(defun init-shooter ()
+  (let ((actors ())
+        (inputs ())
+        (db (make-hash-table)))
+    (flet ((make-player ()
+             (let ((id (make-entity-id)))
+               (push (make-entity db :actor
+                                  :id id :type :player :tick 0 :used t
+                                  :x 400 :y 400 :vx 0 :vy 0
+                                  :rad 0
+                                  :code () :pstack () :gstack ())
+                     actors)
+               (push (make-entity db :input :id id :u nil :d nil :l nil :r nil :z nil) inputs)))
+           (make-enemy ()
+             (let* ((id (make-entity-id))
+                    (bullet-code `(atick 60 gte
+                                         ((getp swap drop dup -50 lt swap 610 gt or (vanish) () if
+                                                getp drop dup -50 lt swap 810 gt or (vanish) () if)
+                                          getv 90 >rad v/rot 3 v/mul shot vanish)
+                                         () if
+                                        getv 0.965 mul swap 0.965 mul setv))
+                    (code `(<<g nil eq (0 >g) () if
+                                atick 10 mod 0 eq
+                                ((,bullet-code swap dup >rad cos 8 mul swap >rad sin 8 mul shot)
+                                 <<g <<g 360 add 10 do <g 7 add >g)
+                                () if)))
+               (push (make-entity db :actor
+                                  :id id :type :enemy :tick 0 :used t
+                                  :x 400 :y 200 :vx 0 :vy 0
+                                  :rad 0
+                                  :code code :pstack () :gstack ())
+                     actors)))
+           (make-bullet ()
+             (let ((id (make-entity-id)))
+               (push (make-entity db :actor
+                                  :id id :type :bullet :tick 0 :used nil
+                                  :x 0 :y 0 :vx 0 :vy 0
+                                  :rad 0
+                                  :code () :pstack () :gstack ())
+                     actors))))
+      (make-player)
+      (make-enemy)
+      (loop :for _ :from 0 :upto 2000 :do (make-bullet))
+      (make-shooter :tick 0
+                    :database db
+                    :actors (coerce actors 'vector)
+                    :inputs (coerce inputs 'vector)))))
 
-(defun draw-vertex (type vertex)
-  (let* ((vao (gl:gen-vertex-array))
-         (vbo (gl:gen-buffers 1))
-         (arr (make-gl-array vertex :float)))
-    (gl:bind-vertex-array vao)
-    (gl:bind-buffer :array-buffer (elt vbo 0))
-    (gl:buffer-data :array-buffer :static-draw arr)
-    (gl:vertex-attrib-pointer 0 2 :float nil 0 0)
-    (gl:enable-vertex-attrib-array 0)
-    (gl:draw-arrays type 0 (length vertex))))
+(defun update-inputs (shooter &key (u nil u?) (d nil d?) (l nil l?) (r nil r?) (s nil s?) (z nil z?))
+  (loop
+    :for i :across (shooter-inputs shooter)
+    :do (progn
+          (when u? (setf (input-u i) u))
+          (when d? (setf (input-d i) d))
+          (when l? (setf (input-l i) l))
+          (when r? (setf (input-r i) r))
+          (when s? (setf (input-s i) s))
+          (when z? (setf (input-z i) z)))))
 
-;; application code
+(defun move-player (shooter)
+  (let* ((p (find :player (shooter-actors shooter) :key #'actor-type))
+         (i (get-component shooter (actor-id p) :input)))
+    (let ((move (if (input-s i) 3 5)))
+      (when (input-u i) (incf (actor-y p) (- move)))
+      (when (input-d i) (incf (actor-y p) move))
+      (when (input-l i) (incf (actor-x p) (- move)))
+      (when (input-r i) (incf (actor-x p) move)))))
 
-(defun setup-shader ()
-  (let* ((vert (make-shader :vertex '((pos :vec4)) nil '(pos)))
-         (frag (make-shader :fragment '() nil '((vari:vec4 0 0 1 1))))
-         (shaders (list vert frag)))
-    (multiple-value-bind (p slis)
-        (make-program shaders)
-      (loop
-        :for iv :in (varjo:input-variables vert)
-        :for n :from 0
-        :do (gl:bind-attrib-location p n (varjo:glsl-name iv)))
+(defun move-actors (shooter)
+  (loop
+    :for a :across (shooter-actors shooter)
+    :do (when (actor-used a)
+          (setf (actor-x a) (+ (actor-x a) (actor-vx a))
+                (actor-y a) (+ (actor-y a) (actor-vy a))))))
 
-      (loop
-        :for ov :in (varjo:output-variables frag)
-        :for n :from 0
-        :do (gl:bind-frag-data-location p n (varjo:glsl-name ov)))
+(defun draw-actors (shooter renderer)
+  (sdl2:set-render-draw-color renderer 255 255 255 255)
+  (loop
+    :for a :across (shooter-actors shooter)
+    :when (actor-used a)
+    :do (sdl2:render-draw-rect renderer
+                               (sdl2:make-rect (- (floor (actor-x a)) 3)
+                                               (- (floor (actor-y a)) 3)
+                                               6 6))))
 
-      (gl:link-program p)
-      p)))
+(defun update-ticks (shooter)
+  (loop
+    :for a :across (shooter-actors shooter)
+    :when (actor-used a)
+    :do (incf (actor-tick a))))
 
-(defun render (context)
-  (gl:clear :color-buffer)
-  (gl:use-program (setup-shader))
-  (draw-vertex :lines #(0.8 0.8 1.0 1.0 0.5 0.5))
-  (draw-vertex :triangles #(0.0 0.0 0.0 0.5 0.5 0.5 0.0 0.0)))
-
-(defun show-window (context)
-  (with-init-window (:title (getf context :title)
-                     :width (getf context :width)
-                     :height (getf context :height)
-                     :context-version-major 4
-                     :context-version-minor 0
-                     :resizable nil)
-    ;; print OpenGL version
-    (format t "OpenGL version: ~a.~a.~a"
-            (glfw:get-window-attribute :context-version-major)
-            (glfw:get-window-attribute :context-version-minor)
-            (glfw:get-window-attribute :context-revision))
-    (set-key-callback 'quit-on-escape)
-    (gl:clear-color 1 1 1 1)
-    (setup-shader)
-
-    (loop
-      :until (window-should-close-p)
-      :do (progn
-            (render context)
-            (swap-buffers)
-            (poll-events)))))
+(defun eval-objects (shooter)
+  (loop
+    :for a :across (shooter-actors shooter)
+    :for input := (get-component shooter (actor-id a) :input)
+    :do (eval-object shooter a)))
 
 (defun main ()
-  (show-window *context*))
+  (sdl2:with-init (:everything)
+    (sdl2:with-window (win :title (getf *game* :title)
+                           :w (getf *game* :width)
+                           :h (getf *game* :height))
+      (sdl2:with-renderer (renderer win :index -1 :flags '(:accelerated))
+        (let ((screen-rect (sdl2:make-rect 0 0 (getf *game* :width) (getf *game* :height)))
+              (shooter (init-shooter)))
+          (sdl2:with-event-loop (:method :poll)
+            (:keydown (:keysym keysym)
+             (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-up)
+               (update-inputs shooter :u t))
+             (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-down)
+               (update-inputs shooter :d t))
+             (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-left)
+               (update-inputs shooter :l t))
+             (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-right)
+               (update-inputs shooter :r t))
+             (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-lshift)
+               (update-inputs shooter :s t))
+             (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-z)
+               (update-inputs shooter :z t))
+             (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-escape)
+               (sdl2:push-event :quit)))
+            (:keyup (:keysym keysym)
+             (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-up)
+               (update-inputs shooter :u nil))
+             (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-down)
+               (update-inputs shooter :d nil))
+             (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-left)
+               (update-inputs shooter :l nil))
+             (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-right)
+               (update-inputs shooter :r nil))
+             (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-lshift)
+               (update-inputs shooter :s nil))
+             (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-z)
+               (update-inputs shooter :z nil)))
+            (:idle ()
+             (sdl2:set-render-draw-color renderer 40 40 40 255)
+             (sdl2:render-fill-rect renderer screen-rect)
+
+             (draw-actors shooter renderer)
+             (move-actors shooter)
+             (move-player shooter)
+             (eval-objects shooter)
+             (update-ticks shooter)
+
+             (incf (shooter-tick shooter))
+             (sdl2:render-present renderer)
+
+             (sdl2:delay (floor (/ 1000 60))))
+            (:quit () t)))))))
