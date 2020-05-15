@@ -254,12 +254,22 @@
                              getv 90 >rad v/rot 4 v/mul shot vanish)
                             () if
                             getv 0.965 mul swap 0.965 mul setv))
-       (code `(<<g nil eq (0 0 >g) () if
-                   atick 5 mod 0 eq
-                   ((,bullet-code
-                     swap dup >rad cos 5 mul swap >rad sin 5 mul shot)
-                    <<g <<g 360 add 40 do <g 3.5 add >g)
-                   () if)))
+       (code `(;;<<g nil eq (0 0 >g) () if
+               ;; atick 5 mod 0 eq
+               ;; ((,bullet-code
+               ;;   swap dup >rad cos 5 mul swap >rad sin 5 mul shot)
+               ;;  <<g <<g 360 add 40 do
+               ;; () if
+               atick 0 eq
+               ((<<g nil eq (0 1 >g) () if
+                     <<g >rad cos 100 mul 400 add
+                     <<g >rad sin 100 mul 300 add
+                     setp
+                     <g 3 add >g)
+                0 0 shot)
+               () if
+               ;;<g 3.5 add >g
+               )))
   (defparameter *enemy-code* code))
 
 (defun init-shooter ()
