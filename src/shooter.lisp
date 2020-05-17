@@ -384,13 +384,24 @@
 
 (defun draw-actors (shooter renderer)
   (sdl2:set-render-draw-color renderer 255 255 255 255)
-  (loop
-    :for a :across (shooter-actors shooter)
-    :when (actor-used a)
-    :do (sdl2:render-draw-rect renderer
-                               (sdl2:make-rect (- (floor (actor-x a)) 3)
-                                               (- (floor (actor-y a)) 3)
-                                               6 6))))
+  (let* ((db (scene-resources shooter)))
+    (loop
+      :for a :across (shooter-actors shooter)
+      :with bullet0-1 := (gethash :bullet0-1 db)
+      :with bullet0-2 := (gethash :bullet0-2 db)
+      :with w := (image-w bullet0-1)
+      :with h := (image-h bullet0-1)
+      :with dx := (/ w 2)
+      :with dy := (/ h 2)
+      :when (actor-used a)
+      :do (sdl2:render-copy renderer (image-texture bullet0-1)
+                            :dest-rect (sdl2:make-rect (- (floor (actor-x a)) dx)
+                                                       (- (floor (actor-y a)) dy)
+                                                       w h))
+      :do (sdl2:render-copy renderer (image-texture bullet0-2)
+                            :dest-rect (sdl2:make-rect (- (floor (actor-x a)) dx)
+                                                       (- (floor (actor-y a)) dy)
+                                                       w h)))))
 
 (defun update-ticks (shooter)
   (loop
@@ -419,3 +430,20 @@
 
 (defmethod input ((scene shooter) &rest keys &key &allow-other-keys)
   (apply #'update-inputs `(,scene ,@keys)))
+
+(defstruct image
+  w h texture)
+
+(defmethod load-resources ((scene shooter) renderer)
+  (let ((db (make-hash-table)))
+    (setf (scene-resources scene) db)
+    (sdl2-image:init '(:png))
+    (flet ((register (name path)
+             (let* ((pathname (asdf:system-relative-pathname :lsd path))
+                    (surface (sdl2-image:load-image pathname))
+                    (texture (sdl2:create-texture-from-surface renderer surface))
+                    (w (sdl2:surface-width surface))
+                    (h (sdl2:surface-height surface)))
+               (setf (gethash name db) (make-image :w w :h h :texture texture)))))
+      (register :bullet0-1 "assets/bullet0-1.png")
+      (register :bullet0-2 "assets/bullet0-2.png"))))
