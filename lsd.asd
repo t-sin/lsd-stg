@@ -7,4 +7,8 @@
                "sdl2-image"
                "sdl2-ttf"
                "cl-portaudio")
-  :components ((:file "lsd")))
+  :components ((:module "src"
+                :serial t
+                :components((:file "scene")
+                            (:file "shooter")
+                            (:file "lsd")))))

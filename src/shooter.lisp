@@ -1,27 +1,20 @@
-(defpackage #:lsd
-  (:use #:cl)
-  (:export #:main))
-(in-package #:lsd)
+(defpackage #:lsd.shooter
+  (:use #:cl
+        #:lsd.scene)
+  (:export #:shooter
+           #:make-shooter))
+(in-package #:lsd.shooter)
 
-(defstruct game
-  (title "Lazy Sweet Dream")
-  (version (asdf:component-version (asdf:find-system :lsd)))
-  (width 800)
-  (height 600)
-  scene)
-
-(defclass scene ()
-  ((width :initform 800
-          :initarg :width
-          :accessor scene-width)
-   (height :initform 600
-           :initarg :height
-           :accessor scene-height)))
-
-(defgeneric draw (scene renderer))
-(defgeneric update (scene))
-(defgeneric input (scene &rest keys &key &allow-other-keys))
-
+(defclass shooter (scene)
+  ((tick :initform 0
+         :accessor shooter-tick)
+   (database :initarg :db
+             :accessor shooter-db)
+   (actors :initarg :actors
+           :accessor shooter-actors)
+   (inputs :initarg :inputs
+           :accessor shooter-inputs)))
+  
 (defparameter *entity-count* 0)
 (defun make-entity-id ()
   (prog1 *entity-count*
@@ -38,9 +31,9 @@
 (defstruct input id u d l r s z)
 
 (defun make-entity (db type &rest keys &key &allow-other-keys)
-  (let* ((maker-name (intern (format nil "MAKE-~a" (symbol-name type)) :lsd))
+  (let* ((maker-name (intern (format nil "MAKE-~a" (symbol-name type)) :lsd.shooter))
          (maker (symbol-function maker-name))
-         (id-name (intern (format nil "~a-ID" (symbol-name type)) :lsd))
+         (id-name (intern (format nil "~a-ID" (symbol-name type)) :lsd.shooter))
          (getter-id (symbol-function id-name))
          (entity (apply maker keys))
          (type (type-of entity)))
@@ -54,7 +47,7 @@
 
 (defun get-component (shooter entity ctype)
   (let* ((db (shooter-db shooter))
-         (components (gethash (intern (symbol-name ctype) :lsd) db)))
+         (components (gethash (intern (symbol-name ctype) :lsd.shooter) db)))
     (unless (null components)
       (gethash entity components))))
 
@@ -411,16 +404,6 @@
     :for input := (get-component shooter (actor-id a) :input)
     :do (eval-object shooter a)))
 
-(defclass shooter (scene)
-  ((tick :initform 0
-         :accessor shooter-tick)
-   (database :initarg :db
-             :accessor shooter-db)
-   (actors :initarg :actors
-           :accessor shooter-actors)
-   (inputs :initarg :inputs
-           :accessor shooter-inputs)))
-  
 (defmethod draw ((scene shooter) renderer)
   (sdl2:set-render-draw-color renderer 40 40 40 255)
   (sdl2:render-fill-rect renderer
@@ -434,48 +417,5 @@
   (update-ticks scene)
   (incf (shooter-tick scene)))
 
-(defmethod input (scene &rest keys &key &allow-other-keys)
-  (apply #'update-inputs `(scene ,@keys)))
-
-(defun main ()
-  (let ((game (make-game :scene (make-shooter))))
-    (sdl2:with-init (:everything)
-      (sdl2:with-window (win :title (game-title game)
-                             :w (game-width game)
-                             :h (game-height game))
-        (sdl2:with-renderer (renderer win :index -1 :flags '(:accelerated))
-          (sdl2:with-event-loop (:method :poll)
-            (:keydown (:keysym keysym)
-             (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-up)
-               (input (game-scene game) :u t))
-             (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-down)
-               (input (game-scene game) :d t))
-             (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-left)
-               (input (game-scene game) :l t))
-             (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-right)
-               (input (game-scene game) :r t))
-             (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-lshift)
-               (input (game-scene game) :s t))
-             (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-z)
-               (input (game-scene game) :z t))
-             (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-escape)
-               (sdl2:push-event :quit)))
-            (:keyup (:keysym keysym)
-             (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-up)
-               (input (game-scene game) :u nil))
-             (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-down)
-               (input (game-scene game) :d nil))
-             (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-left)
-               (input (game-scene game) :l nil))
-             (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-right)
-               (input (game-scene game) :r nil))
-             (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-lshift)
-               (input (game-scene game) :s nil))
-             (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-z)
-               (input (game-scene game) :z nil)))
-            (:idle ()
-             (draw (game-scene game) renderer)
-             (update (game-scene game))
-             (sdl2:render-present renderer)
-             (sdl2:delay (floor (/ 1000 60))))
-            (:quit () t)))))))
+(defmethod input ((scene shooter) &rest keys &key &allow-other-keys)
+  (apply #'update-inputs `(,scene ,@keys)))
