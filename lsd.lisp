@@ -3,11 +3,24 @@
   (:export #:main))
 (in-package #:lsd)
 
-(defparameter *game*
-  (list :title "Lazy Sweet Dream"
-        :version (asdf:component-version (asdf:find-system :lsd))
-        :width 800
-        :height 600))
+(defstruct game
+  (title "Lazy Sweet Dream")
+  (version (asdf:component-version (asdf:find-system :lsd)))
+  (width 800)
+  (height 600)
+  scene)
+
+(defclass scene ()
+  ((width :initform 800
+          :initarg :width
+          :accessor scene-width)
+   (height :initform 600
+           :initarg :height
+           :accessor scene-height)))
+
+(defgeneric draw (scene renderer))
+(defgeneric update (scene))
+(defgeneric input (scene &rest keys &key &allow-other-keys))
 
 (defparameter *entity-count* 0)
 (defun make-entity-id ()
@@ -23,11 +36,6 @@
   code pstack gstack)
 
 (defstruct input id u d l r s z)
-
-(defstruct shooter
-  tick
-  database
-  actors inputs)
 
 (defun make-entity (db type &rest keys &key &allow-other-keys)
   (let* ((maker-name (intern (format nil "MAKE-~a" (symbol-name type)) :lsd))
@@ -45,7 +53,7 @@
     entity))
 
 (defun get-component (shooter entity ctype)
-  (let* ((db (shooter-database shooter))
+  (let* ((db (shooter-db shooter))
          (components (gethash (intern (symbol-name ctype) :lsd) db)))
     (unless (null components)
       (gethash entity components))))
@@ -304,7 +312,7 @@
                   over over swap >rad sin swap mul <<g cdr add
                   >g rot <g
                   setp
-                  swap 4 add swap dup 100 gte (drop 100) (2 add) if
+                  swap 2 add swap dup 100 gte (drop 100) (2 add) if
                   atick 10 mod 0 eq ((getp swap drop dup -50 lt swap 610 gt or (vanish) () if
                                       getp drop dup -50 lt swap 810 gt or (vanish) () if)
                                      nil nil getp <<g cdr sub 100 div swap <<g car sub 100 div swap shot) () if)
@@ -317,7 +325,7 @@
                )))
   (defparameter *enemy-code* code))
 
-(defun init-shooter ()
+(defun make-shooter ()
   (let ((actors ())
         (inputs ())
         (db (make-hash-table)))
@@ -349,10 +357,10 @@
       (make-player)
       (make-enemy)
       (loop :for _ :from 0 :upto 2000 :do (make-bullet))
-      (make-shooter :tick 0
-                    :database db
-                    :actors (coerce actors 'vector)
-                    :inputs (coerce inputs 'vector)))))
+      (make-instance 'shooter
+                     :db db
+                     :actors (coerce actors 'vector)
+                     :inputs (coerce inputs 'vector)))))
 
 (defun update-inputs (shooter &key (u nil u?) (d nil d?) (l nil l?) (r nil r?) (s nil s?) (z nil z?))
   (loop
@@ -403,55 +411,71 @@
     :for input := (get-component shooter (actor-id a) :input)
     :do (eval-object shooter a)))
 
+(defclass shooter (scene)
+  ((tick :initform 0
+         :accessor shooter-tick)
+   (database :initarg :db
+             :accessor shooter-db)
+   (actors :initarg :actors
+           :accessor shooter-actors)
+   (inputs :initarg :inputs
+           :accessor shooter-inputs)))
+  
+(defmethod draw ((scene shooter) renderer)
+  (sdl2:set-render-draw-color renderer 40 40 40 255)
+  (sdl2:render-fill-rect renderer
+                         (sdl2:make-rect 0 0 (scene-width scene) (scene-height scene)))
+  (draw-actors scene renderer))
+
+(defmethod update ((scene shooter))
+  (move-actors scene)
+  (move-player scene)
+  (eval-objects scene)
+  (update-ticks scene)
+  (incf (shooter-tick scene)))
+
+(defmethod input (scene &rest keys &key &allow-other-keys)
+  (apply #'update-inputs `(scene ,@keys)))
+
 (defun main ()
-  (sdl2:with-init (:everything)
-    (sdl2:with-window (win :title (getf *game* :title)
-                           :w (getf *game* :width)
-                           :h (getf *game* :height))
-      (sdl2:with-renderer (renderer win :index -1 :flags '(:accelerated))
-        (let ((screen-rect (sdl2:make-rect 0 0 (getf *game* :width) (getf *game* :height)))
-              (shooter (init-shooter)))
+  (let ((game (make-game :scene (make-shooter))))
+    (sdl2:with-init (:everything)
+      (sdl2:with-window (win :title (game-title game)
+                             :w (game-width game)
+                             :h (game-height game))
+        (sdl2:with-renderer (renderer win :index -1 :flags '(:accelerated))
           (sdl2:with-event-loop (:method :poll)
             (:keydown (:keysym keysym)
              (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-up)
-               (update-inputs shooter :u t))
+               (input (game-scene game) :u t))
              (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-down)
-               (update-inputs shooter :d t))
+               (input (game-scene game) :d t))
              (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-left)
-               (update-inputs shooter :l t))
+               (input (game-scene game) :l t))
              (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-right)
-               (update-inputs shooter :r t))
+               (input (game-scene game) :r t))
              (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-lshift)
-               (update-inputs shooter :s t))
+               (input (game-scene game) :s t))
              (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-z)
-               (update-inputs shooter :z t))
+               (input (game-scene game) :z t))
              (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-escape)
                (sdl2:push-event :quit)))
             (:keyup (:keysym keysym)
              (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-up)
-               (update-inputs shooter :u nil))
+               (input (game-scene game) :u nil))
              (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-down)
-               (update-inputs shooter :d nil))
+               (input (game-scene game) :d nil))
              (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-left)
-               (update-inputs shooter :l nil))
+               (input (game-scene game) :l nil))
              (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-right)
-               (update-inputs shooter :r nil))
+               (input (game-scene game) :r nil))
              (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-lshift)
-               (update-inputs shooter :s nil))
+               (input (game-scene game) :s nil))
              (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-z)
-               (update-inputs shooter :z nil)))
+               (input (game-scene game) :z nil)))
             (:idle ()
-             (sdl2:set-render-draw-color renderer 40 40 40 255)
-             (sdl2:render-fill-rect renderer screen-rect)
-
-             (draw-actors shooter renderer)
-             (move-actors shooter)
-             (move-player shooter)
-             (eval-objects shooter)
-             (update-ticks shooter)
-
-             (incf (shooter-tick shooter))
+             (draw (game-scene game) renderer)
+             (update (game-scene game))
              (sdl2:render-present renderer)
-
              (sdl2:delay (floor (/ 1000 60))))
             (:quit () t)))))))
