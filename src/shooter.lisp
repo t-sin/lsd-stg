@@ -14,6 +14,8 @@
            :accessor shooter-actors)
    (inputs :initarg :inputs
            :accessor shooter-inputs)
+   (animated :initarg :animated
+             :accessor shooter-animated)
    (screen-x :initform 200
          :initarg :sx
          :accessor shooter-screen-x)
@@ -41,6 +43,12 @@
   code pstack gstack)
 
 (defstruct input id u d l r s z)
+(defstruct animated
+  id
+  idx num
+  frame framenum
+  name
+  x y w h)
 
 (defun make-entity (db type &rest keys &key &allow-other-keys)
   (let* ((maker-name (intern (format nil "MAKE-~a" (symbol-name type)) :lsd.shooter))
@@ -333,6 +341,7 @@
 (defun make-shooter ()
   (let ((actors ())
         (inputs ())
+        (animated ())
         (db (make-hash-table)))
     (flet ((make-player ()
              (let ((id (make-entity-id)))
@@ -342,7 +351,13 @@
                                   :rad 0
                                   :code () :pstack () :gstack ())
                      actors)
-               (push (make-entity db :input :id id :u nil :d nil :l nil :r nil :z nil) inputs)))
+               (push (make-entity db :input :id id :u nil :d nil :l nil :r nil :z nil) inputs)
+               (push (make-entity db :animated :id id
+                                  :idx 0 :num 4
+                                  :frame 0 :framenum 10
+                                  :name :tapir
+                                  :x 20 :y 40 :w 40 :h 60)
+                     animated)))
            (make-enemy ()
              (let ((id (make-entity-id)))
                (push (make-entity db :actor
@@ -350,7 +365,13 @@
                                   :x 200 :y 100 :vx 0 :vy 0
                                   :rad 0
                                   :code *enemy-code* :pstack () :gstack ())
-                     actors)))
+                     actors)
+               (push (make-entity db :animated :id id
+                                  :idx 0 :num 1
+                                  :frame 0 :framenum 5
+                                  :name :bullet0
+                                  :x 8 :y 8 :w 16 :h 16)
+                     animated)))
            (make-bullet ()
              (let ((id (make-entity-id)))
                (push (make-entity db :actor
@@ -358,14 +379,21 @@
                                   :x 0 :y 0 :vx 0 :vy 0
                                   :rad 0
                                   :code () :pstack () :gstack ())
-                     actors))))
+                     actors)
+               (push (make-entity db :animated :id id
+                                  :idx 0 :num 1
+                                  :frame 0 :framenum 5
+                                  :name :bullet0
+                                  :x 8 :y 8 :w 16 :h 16)
+                     animated))))
       (make-player)
       (make-enemy)
       (loop :for _ :from 0 :upto 2000 :do (make-bullet))
       (make-instance 'shooter
                      :db db
-                     :actors (coerce actors 'vector)
-                     :inputs (coerce inputs 'vector)))))
+                     :actors (coerce (nreverse actors) 'vector)
+                     :inputs (coerce (nreverse inputs) 'vector)
+                     :animated (coerce (nreverse animated) 'vector)))))
 
 (defun update-inputs (shooter &key (u nil u?) (d nil d?) (l nil l?) (r nil r?) (s nil s?) (z nil z?))
   (loop
@@ -394,23 +422,31 @@
           (setf (actor-x a) (+ (actor-x a) (actor-vx a))
                 (actor-y a) (+ (actor-y a) (actor-vy a))))))
 
-(defun draw-actors (shooter renderer)
+(defun draw-animated (shooter renderer)
   (sdl2:set-render-draw-color renderer 255 255 255 255)
   (let* ((db (scene-resources shooter)))
     (loop
-      :for a :across (shooter-actors shooter)
-      :with bullet0 := (gethash :bullet0 db)
-      :with w := (image-w bullet0)
-      :with h := (image-h bullet0)
-      :with dx := (/ w 2)
-      :with dy := (/ h 2)
-      :with offx := (shooter-screen-x shooter)
-      :with offy := (shooter-screen-y shooter)
-      :when (actor-used a)
-      :do (sdl2:render-copy renderer (image-texture bullet0)
-                            :dest-rect (sdl2:make-rect (+ offx (- (floor (actor-x a)) dx))
-                                                       (+ offy (- (floor (actor-y a)) dy))
-                                                       w h)))))
+      :for actor :across (shooter-actors shooter)
+      :for anim := (get-component shooter (actor-id actor) :animated)
+      :for img := (gethash (animated-name anim) db)
+      :for img-w := (image-w img)
+      :for img-h := (image-h img)
+      :for anim-w := (animated-w anim)
+      :for anim-h := (animated-h anim)
+      :for x := (* (animated-idx anim) anim-w)
+      :for y := (animated-y anim)
+      :with x0 := (shooter-screen-x shooter)
+      :with y0 := (shooter-screen-y shooter)
+      :when (actor-used actor)
+      :do (sdl2:render-copy renderer (image-texture img)
+                            :source-rect (sdl2:make-rect x 0 anim-w anim-h)
+                            :dest-rect (sdl2:make-rect (+ x0 (- (floor (actor-x actor)) (animated-x anim)))
+                                                       (+ y0 (- (floor (actor-y actor)) (animated-y anim)))
+                                                       anim-w anim-h))
+      :do (when (zerop (mod (animated-frame anim) (animated-framenum anim)))
+            (setf (animated-idx anim)
+                  (mod (1+ (animated-idx anim)) (animated-num anim))))
+      :do (incf (animated-frame anim)))))
 
 (defun update-ticks (shooter)
   (loop
@@ -428,7 +464,7 @@
   (sdl2:set-render-draw-color renderer 40 40 40 255)
   (sdl2:render-fill-rect renderer
                          (sdl2:make-rect 200 25 400 550))
-  (draw-actors scene renderer)
+  (draw-animated scene renderer)
   (let ((bg-1 (gethash :bg-1 (scene-resources scene))))
     (sdl2:render-copy renderer (image-texture bg-1)
                       :dest-rect (sdl2:make-rect 0 0 (image-w bg-1) (image-h bg-1))))
@@ -477,4 +513,5 @@
       (register :bg-4 "assets/bg_4.png")
       (register :bullet0 "assets/bullet0.png")
       (register :bullet0-1 "assets/bullet0-1.png")
-      (register :bullet0-2 "assets/bullet0-2.png"))))
+      (register :bullet0-2 "assets/bullet0-2.png")
+      (register :tapir "assets/lsd-tapir.png"))))
