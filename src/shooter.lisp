@@ -331,7 +331,10 @@
   (incf (machine-ip machine)))
 
 (defun vm/shot (actor machine shooter)
-  (let ((b (find nil (shooter-actors shooter) :key #'actor-used)))
+  (let ((b (find-if (lambda (a)
+                      (and (null (actor-used a))
+                           (eq (actor-type a) :bullet)))
+                    (shooter-actors shooter))))
     (when b
       (let ((vy (pop (actor-pstack actor)))
             (vx (pop (actor-pstack actor)))
