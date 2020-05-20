@@ -5,6 +5,10 @@
            #:make-shooter))
 (in-package #:lsd.shooter)
 
+(defun distance (ax ay bx by)
+  (sqrt (+ (expt (- bx ax) 2)
+           (expt (- by ay) 2))))
+
 (defclass shooter (scene)
   ((tick :initform 0
          :accessor shooter-tick)
@@ -607,10 +611,6 @@
     :do (when (actor-used a)
           (setf (actor-x a) (+ x (actor-vx a))
                 (actor-y a) (+ y (actor-vy a))))))
-
-(defun distance (ax ay bx by)
-  (sqrt (+ (expt (- bx ax) 2)
-           (expt (- by ay) 2))))
 
 (defun check-collision (shooter)
   (let* ((player (find :player (shooter-actors shooter) :key #'actor-type))
