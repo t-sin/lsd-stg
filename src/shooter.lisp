@@ -364,8 +364,9 @@
 
 (defun vm/ppos (actor machine shooter)
   (let ((p (find :player (shooter-actors shooter) :key #'actor-type)))
-    (push (actor-x p) (actor-pstack actor))
-    (push (actor-y p) (actor-pstack actor))
+    (when p
+      (push (actor-x p) (actor-pstack actor))
+      (push (actor-y p) (actor-pstack actor)))
     (incf (machine-ip machine))))
 
 (defun vm/pos (actor machine shooter)
