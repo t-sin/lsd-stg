@@ -584,7 +584,8 @@
       :for h := (get-component shooter (actor-id a) :hitable)
       :for x := (actor-x a)
       :for y := (actor-y a)
-      :unless (= (actor-id a) pid)
+      :when (and (actor-used a)
+                 (not (= (actor-id a) pid)))
       :do (when (and (not (null h))
                      (> x (- px 50))
                      (< x (+ px 50))
@@ -592,7 +593,7 @@
                      (< y (+ py 50)))
             (when (< (distance px py x y)
                      (+ (hitable-radius ph) (hitable-radius h)))
-              (setf (actor-used a) nil)
+              (actor-vanish a)
               (loop
                 :for _ :from 1 :upto 5
                 :for p := (find-if (lambda (a)
