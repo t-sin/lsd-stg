@@ -418,92 +418,87 @@
                    (case inst
                      ;;(:.s (print (actor-pstack actor) #.*standard-output*))
                      ;;; trigonometric
-                     ('>rad (vm/>rad actor m shooter))
-                     ('>deg (vm/>deg actor m shooter))
-                     ('sin (vm/sin actor m shooter))
-                     ('cos (vm/cos actor m shooter))
+                     (>rad (vm/>rad actor m shooter))
+                     (>deg (vm/>deg actor m shooter))
+                     (sin (vm/sin actor m shooter))
+                     (cos (vm/cos actor m shooter))
                      ;;; logical
-                     ('eq (vm/eq actor m shooter))
-                     ('or (vm/or actor m shooter))
-                     ('and (vm/and actor m shooter))
+                     (eq (vm/eq actor m shooter))
+                     (or (vm/or actor m shooter))
+                     (and (vm/and actor m shooter))
                      ;;; numeric
-                     ('gt (vm/gt actor m shooter))
-                     ('gte (vm/gte actor m shooter))
-                     ('lt (vm/lt actor m shooter))
-                     ('lte (vm/lte actor m shooter))
-                     ('mod (vm/mod actor m shooter))
-                     ('add (vm/add actor m shooter))
-                     ('sub (vm/sub actor m shooter))
-                     ('mul (vm/mul actor m shooter))
-                     ('div (vm/div actor m shooter))
-                     ('rnd (vm/rnd actor m shooter))
+                     (gt (vm/gt actor m shooter))
+                     (gte (vm/gte actor m shooter))
+                     (lt (vm/lt actor m shooter))
+                     (lte (vm/lte actor m shooter))
+                     (mod (vm/mod actor m shooter))
+                     (add (vm/add actor m shooter))
+                     (sub (vm/sub actor m shooter))
+                     (mul (vm/mul actor m shooter))
+                     (div (vm/div actor m shooter))
+                     (rnd (vm/rnd actor m shooter))
                      ;; lists
-                     ('cons (vm/cons actor m shooter))
-                     ('car (vm/car actor m shooter))
-                     ('cdr (vm/cdr actor m shooter))
+                     (cons (vm/cons actor m shooter))
+                     (car (vm/car actor m shooter))
+                     (cdr (vm/cdr actor m shooter))
                      ;;; vectors
-                     ('v/rot (vm/v/rot actor m shooter))
-                     ('v/mul (vm/v/mul actor m shooter))
+                     (v/rot (vm/v/rot actor m shooter))
+                     (v/mul (vm/v/mul actor m shooter))
+                     (v/add (vm/v/mul actor m shooter))
+                     (v/norm (vm/v/norm actor m shooter))
                      ;;; control flow
-                     ('if (vm/if actor m shooter))
-                     ('do (vm/do actor m shooter))
+                     (if (vm/if actor m shooter))
+                     (do (vm/do actor m shooter))
                      ;;; stack manipulation
-                     ('dup (vm/dup actor m shooter))
-                     ('drop (vm/drop actor m shooter))
-                     ('swap (vm/swap actor m shooter))
-                     ('over (vm/over actor m shooter))
-                     ('rot (vm/rot actor m shooter))
-                     ('<g (vm/<g actor m shooter))
-                     ('<<g (vm/<<g actor m shooter))
-                     ('>g (vm/>g actor m shooter))
+                     (dup (vm/dup actor m shooter))
+                     (drop (vm/drop actor m shooter))
+                     (swap (vm/swap actor m shooter))
+                     (over (vm/over actor m shooter))
+                     (rot (vm/rot actor m shooter))
+                     (<g (vm/<g actor m shooter))
+                     (<<g (vm/<<g actor m shooter))
+                     (>g (vm/>g actor m shooter))
                      ;;; actors
-                     ('gtick (vm/gtick actor m shooter))
-                     ('atick (vm/atick actor m shooter))
-                     ('getp (vm/getp actor m shooter))
-                     ('setp (vm/setp actor m shooter))
-                     ('getv (vm/getv actor m shooter))
-                     ('setv (vm/setv actor m shooter))
-                     ;;; bullets
-                     ('vanish (vm/vanish actor m shooter))
-                     ('shot (vm/shot actor m shooter))))
+                     (gtick (vm/gtick actor m shooter))
+                     (atick (vm/atick actor m shooter))
+                     (ppos (vm/ppos actor m shooter))
+                     (pos (vm/pos actor m shooter))
+                     (pos! (vm/pos! actor m shooter))
+                     (vel (vm/vel actor m shooter))
+                     (vel! (vm/vel! actor m shooter))
+                     ;; bullets
+                     (vanish (vm/vanish actor m shooter))
+                     (shot (vm/shot actor m shooter))))
                   (t (push inst (actor-pstack actor))
                      (incf (machine-ip m))))))))
 
-(let* ((bullet-code `(atick 60 gte
-                            ((getp swap drop dup -5 lt swap 300 gt or (vanish) () if
-                                   getp drop dup -5 lt swap 550 gt or (vanish) () if)
-                             getv 90 >rad v/rot 4 v/mul shot vanish)
-                            () if
-                            getv 0.965 mul swap 0.965 mul setv))
-       (vanish-on-edge `(getp drop dup -10 lt swap 420 gt or (vanish) () if
-                              getp swap drop dup -10 lt swap 560 gt or (vanish) () if))
-       (code `(;;<<g nil eq (0 0 >g) () if
-               ;; atick 5 mod 0 eq
-               ;; ((,bullet-code
-               ;;   swap dup >rad cos 5 mul swap >
-               ;;  <<g <<g 360 add 40 do
-               ;; () if
+(let* ((vanish-on-edge `(;; vanish itsself when out of screen
+                         pos drop dup -10 lt swap 420 gt or (vanish) () if
+                         pos swap drop dup -10 lt swap 560 gt or (vanish) () if))
+       (code `(;; at once,
                atick 0 eq
-               (((;; P: angle radius
-                  ;; G: amp (x . y)
-                  over over swap >rad cos swap mul <<g car add
-                  rot rot
-                  over over swap >rad sin swap mul <<g cdr add
-                  >g rot <g
-                  setp
-                  swap 2 add swap dup 100 gte
-                  () (2 add) if
-                  atick 10 mod 9 eq
-                  (,vanish-on-edge
-                   nil nil getp <<g cdr sub 100 div swap <<g car sub 100 div swap shot)
-                  () if)
-                 swap 1 nil cons cons
-                 0 getp cons nil cons cons
-                 0 0 shot)
-                 0 360 45 do)
+               ((;; shot two bits.
+                 (;; if the bits' speed is greater than 0.1
+                  vel v/norm 0.1 gte
+                  ;; decrease its speed
+                  (vel 0.94 v/mul vel!)
+                  ;; but else the bits shot to player n-way bullets.
+                  ()
+                  ) swap
+                 nil swap
+                 nil swap
+                 8 mul 1 shot)
+                -1 1 2 do)
                () if
-               ;;<g 3.5 add >g
-               )))
+               ;; by 10 frames
+               atick 60 mod 0 eq
+               (;; shot arround 90-way bullets
+                (dup
+                 >rad cos 2.3 mul >g
+                 >rad sin 2.3 mul >g
+                 ,vanish-on-edge nil nil <g <g swap shot)
+                rnd 15 mul dup 360 add 4 do)
+               () if)))
   (defparameter *enemy-code* code))
 
 (defun make-shooter ()
