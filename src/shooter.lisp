@@ -238,7 +238,7 @@
         (y1 (pop (actor-pstack actor)))
         (x1 (pop (actor-pstack actor))))
     (push (+ x1 x2) (actor-pstack actor))
-    (push (+ y2 y2) (actor-pstack actor))
+    (push (+ y1 y2) (actor-pstack actor))
     (incf (machine-ip machine))))
 
 (defun vm/v/mul (actor machine shooter)
