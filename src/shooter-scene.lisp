@@ -47,7 +47,7 @@
          (px (actor-x player))
          (py (actor-y player))
          (particle-code (let ((*package* (find-package :lsd.shooter.vm)))
-                          (read-from-string "(atick 19 gte (vanish) () if)"))))
+                          (read-from-string "(atick 18 gte (vanish) () if)"))))
     (loop
       :for h :across (shooter-hitables shooter)
       :for a := (get-component shooter (hitable-id h) :actor)
