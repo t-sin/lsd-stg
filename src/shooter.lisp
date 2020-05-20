@@ -39,6 +39,7 @@
 (defstruct actor
   id type tick
   x y
+  px py
   vx vy
   rad
   used
@@ -307,6 +308,8 @@
 (defun vm/setp (actor machine shooter)
   (let ((y (pop (actor-pstack actor)))
         (x (pop (actor-pstack actor))))
+    (setf (actor-px actor) (actor-x actor)
+          (actor-py actor) (actor-y actor))
     (setf (actor-x actor) x
           (actor-y actor) y)
     (incf (machine-ip machine))))
@@ -475,7 +478,7 @@
              (let ((id (make-entity-id)))
                (push (make-entity db :actor
                                   :id id :type :player :tick 0 :used t
-                                  :x 200 :y 500 :vx 0 :vy 0
+                                  :x 200 :y 500 :px 0 :py 0 :vx 0 :vy 0
                                   :rad 0
                                   :code () :pstack () :gstack ())
                      actors)
@@ -491,7 +494,7 @@
              (let ((id (make-entity-id)))
                (push (make-entity db :actor
                                   :id id :type :enemy :tick 0 :used t
-                                  :x 200 :y 100 :vx 0 :vy 0
+                                  :x 200 :y 100 :px 0 :py 0 :vx 0 :vy 0
                                   :rad 0
                                   :code *enemy-code* :pstack () :gstack ())
                      actors)
@@ -506,7 +509,7 @@
              (let ((id (make-entity-id)))
                (push (make-entity db :actor
                                   :id id :type :bullet :tick 0 :used nil
-                                  :x 0 :y 0 :vx 0 :vy 0
+                                  :x 0 :y 0 :px 0 :py 0 :vx 0 :vy 0
                                   :rad 0
                                   :code () :pstack () :gstack ())
                      actors)
@@ -521,15 +524,15 @@
              (let ((id (make-entity-id)))
                (push (make-entity db :actor
                                   :id id :type :particle :tick 0 :used nil
-                                  :x 0 :y 0 :vx 0 :vy 0
+                                  :x 0 :y 0 :px 0 :py 0 :vx 0 :vy 0
                                   :rad 0
                                   :code () :pstack () :gstack ())
                      actors)
                (push (make-entity db :animated :id id
-                                  :idx (floor (random 4)) :num 4
-                                  :frame 0 :framenum 5
-                                  :name :particle0
-                                  :x 4 :y 4 :w 8 :h 8)
+                                  :idx 0 :num 7
+                                  :frame 0 :framenum 3
+                                  :name :bullet0-broken
+                                  :x 8 :y 8 :w 16 :h 16)
                      animated))))
       (make-player)
       (make-enemy)
@@ -565,9 +568,11 @@
 (defun move-actors (shooter)
   (loop
     :for a :across (shooter-actors shooter)
+    :for x := (actor-x a)
+    :for y := (actor-y a)
     :do (when (actor-used a)
-          (setf (actor-x a) (+ (actor-x a) (actor-vx a))
-                (actor-y a) (+ (actor-y a) (actor-vy a))))))
+          (setf (actor-x a) (+ x (actor-vx a))
+                (actor-y a) (+ y (actor-vy a))))))
 
 (defun distance (ax ay bx by)
   (sqrt (+ (expt (- bx ax) 2)
@@ -594,20 +599,25 @@
             (when (< (distance px py x y)
                      (+ (hitable-radius ph) (hitable-radius h)))
               (actor-vanish a)
-              (loop
-                :for _ :from 1 :upto 5
-                :for p := (find-if (lambda (a)
-                                     (and (null (actor-used a))
-                                          (eq (actor-type a) :particle)))
-                                   (shooter-actors shooter))
-                :unless (null p)
-                :do (setf (actor-used p) t
-                          (actor-pstack p) nil
-                          (actor-code p) '(atick 20 gte (vanish) () if)
-                          (actor-x p) x
-                          (actor-y p) y
-                          (actor-vx p) (* 3 (- (random 2.0) 1))
-                          (actor-vy p) (* 3 (- (random 2.0) 1)))))))))
+              (let* ((p (find-if (lambda (a)
+                                   (and (null (actor-used a))
+                                        (eq (actor-type a) :particle)))
+                                 (shooter-actors shooter)))
+                     (anim (get-component shooter (actor-id p) :animated)))
+                (when p
+                  (setf (animated-idx anim) 0
+                        (animated-frame anim) 0)
+                  (setf (actor-used p) t
+                        (actor-pstack p) nil
+                        (actor-code p) '(atick 19 gte (vanish) () if)
+                        (actor-x p) x
+                        (actor-y p) y
+                        (actor-vx p) (if (zerop (actor-vx a))
+                                         (- x (actor-px a))
+                                         (actor-vx a))
+                        (actor-vy p) (if (zerop (actor-vy a))
+                                         (- y (actor-py a))
+                                         (actor-vy a))))))))))
 
 (defun draw-animated (shooter renderer)
   (sdl2:set-render-draw-color renderer 255 255 255 255)
@@ -620,13 +630,12 @@
       :for img-h := (image-h img)
       :for anim-w := (animated-w anim)
       :for anim-h := (animated-h anim)
-      :for x := (* (animated-idx anim) anim-w)
-      :for y := (animated-y anim)
+      :for offset-x := (* (animated-idx anim) anim-w)
       :with x0 := (shooter-screen-x shooter)
       :with y0 := (shooter-screen-y shooter)
       :when (actor-used actor)
       :do (sdl2:render-copy renderer (image-texture img)
-                            :source-rect (sdl2:make-rect x 0 anim-w anim-h)
+                            :source-rect (sdl2:make-rect offset-x 0 anim-w anim-h)
                             :dest-rect (sdl2:make-rect (+ x0 (- (floor (actor-x actor)) (animated-x anim)))
                                                        (+ y0 (- (floor (actor-y actor)) (animated-y anim)))
                                                        anim-w anim-h))
@@ -700,6 +709,7 @@
       (register :bg-3 "assets/bg_3.png")
       (register :bg-4 "assets/bg_4.png")
       (register :bullet0 "assets/bullet0.png")
+      (register :bullet0-broken "assets/broken-bullet0.png")
       (register :bullet0-1 "assets/bullet0-1.png")
       (register :bullet0-2 "assets/bullet0-2.png")
       (register :particle0 "assets/particle0.png")
