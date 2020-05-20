@@ -519,11 +519,24 @@
                atick 0 eq
                ((;; shot two bits.
                  (;; if the bits' speed is greater than 0.1
-                  vel v/norm 0.1 gte
+                  vel v/norm 0.1 gt
                   ;; decrease its speed
                   (vel 0.94 v/mul vel!)
+                  (0 0 vel!)
+                  if
+                  atick 30 gte atick 20 mod 0 eq and
                   ;; but else the bits shot to player n-way bullets.
-                  ()
+                  ((;; n-way
+                    >g
+                    ;; bullets will be vanish on edge of screen
+                    ,vanish-on-edge nil nil
+                    ;; aim to playter
+                    ppos pos -1 v/mul v/add atan dup
+                    <<g >rad add cos 4 mul swap
+                    <g >rad add sin 4 mul
+                    shot)
+                   -16 16 8 do)
+                  () if
                   ) swap
                  nil swap
                  nil swap
