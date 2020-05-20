@@ -111,6 +111,13 @@
         (actor-pstack actor))
   (incf (machine-ip machine)))
 
+(defun vm/atan (actor machine shooter)
+  (declare (ignore shooter))
+  (let ((y (pop (actor-pstack actor)))
+        (x (pop (actor-pstack actor))))
+    (push (atan y x) (actor-pstack actor))
+    (incf (machine-ip machine))))
+
 (defun vm/eq (actor machine shooter)
   (declare (ignore shooter))
   (push (equal (pop (actor-pstack actor))
@@ -453,6 +460,7 @@
                      (>deg (vm/>deg actor m shooter))
                      (sin (vm/sin actor m shooter))
                      (cos (vm/cos actor m shooter))
+                     (atan (vm/atan actor m shooter))
                      ;;; logical
                      (eq (vm/eq actor m shooter))
                      (or (vm/or actor m shooter))
