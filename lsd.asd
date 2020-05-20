@@ -9,6 +9,12 @@
                "cl-portaudio")
   :components ((:module "src"
                 :serial t
-                :components((:file "scene")
-                            (:file "shooter")
-                            (:file "lsd")))))
+                :components ((:file "scene")
+                             (:module "shooter"
+                              :serial t
+                              :components ((:file "util")
+                                           (:file "scene")
+                                           (:file "component")
+                                           (:file "vm")))
+                             (:file "shooter-scene")
+                             (:file "lsd")))))

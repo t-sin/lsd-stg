@@ -7,7 +7,7 @@
            #:scene-resources
            #:draw
            #:update
-           #:input
+           #:handle-input
            #:load-resources))
 (in-package #:lsd.scene)
 
@@ -23,4 +23,4 @@
 (defgeneric load-resources (scene renderer))
 (defgeneric draw (scene renderer))
 (defgeneric update (scene))
-(defgeneric input (scene &rest keys &key &allow-other-keys))
+(defgeneric handle-input (scene &rest keys &key &allow-other-keys))
