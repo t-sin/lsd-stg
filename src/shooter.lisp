@@ -585,8 +585,8 @@
          (px (actor-x player))
          (py (actor-y player)))
     (loop
-      :for a :across (shooter-actors shooter)
-      :for h := (get-component shooter (actor-id a) :hitable)
+      :for h :across (shooter-hitables shooter)
+      :for a := (get-component shooter (hitable-id h) :actor)
       :for x := (actor-x a)
       :for y := (actor-y a)
       :when (and (actor-used a)
