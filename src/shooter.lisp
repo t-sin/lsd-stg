@@ -362,6 +362,7 @@
     (incf (machine-ip machine))))
 
 (defun vm/vanish (actor machine shooter)
+  (declare (ignore shooter))
   (actor-vanish actor)
   (incf (machine-ip machine)))
 
