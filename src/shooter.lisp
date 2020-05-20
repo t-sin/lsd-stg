@@ -475,7 +475,7 @@
                      ;;; vectors
                      (v/rot (vm/v/rot actor m shooter))
                      (v/mul (vm/v/mul actor m shooter))
-                     (v/add (vm/v/mul actor m shooter))
+                     (v/add (vm/v/add actor m shooter))
                      (v/norm (vm/v/norm actor m shooter))
                      ;;; control flow
                      (if (vm/if actor m shooter))
