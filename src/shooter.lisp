@@ -83,9 +83,10 @@
                     (:if (setf code (second c)
                                ip (third c)))
                     (:do (let ((doinfo (second c)))
-                           (if (> (first doinfo) (second doinfo))
-                               (setf code (third c)
-                                     ip (fourth c))
+                           (if (>= (first doinfo) (second doinfo))
+                               (progn
+                                 (setf code (third c)
+                                       ip (fourth c)))
                                (progn
                                  (setf (actor-pstack actor) nil
                                        ip 0)
@@ -311,6 +312,8 @@
                              getv 90 >rad v/rot 4 v/mul shot vanish)
                             () if
                             getv 0.965 mul swap 0.965 mul setv))
+       (vanish-on-edge `(getp drop dup -10 lt swap 420 gt or (vanish) () if
+                              getp swap drop dup -10 lt swap 560 gt or (vanish) () if))
        (code `(;;<<g nil eq (0 0 >g) () if
                ;; atick 5 mod 0 eq
                ;; ((,bullet-code
@@ -319,20 +322,22 @@
                ;; () if
                atick 0 eq
                (((;; P: angle radius
-                  ;; G: (x . y)
+                  ;; G: amp (x . y)
                   over over swap >rad cos swap mul <<g car add
                   rot rot
                   over over swap >rad sin swap mul <<g cdr add
                   >g rot <g
                   setp
-                  swap 2 add swap dup 100 gte (drop 100) (2 add) if
-                  atick 10 mod 0 eq ((getp drop dup -10 lt swap 420 gt or (vanish) () if
-                                      getp swap drop dup -10 lt swap 560 gt or (vanish) () if)
-                                     nil nil getp <<g cdr sub 100 div swap <<g car sub 100 div swap shot) () if)
+                  swap 2 add swap dup 100 gte
+                  () (2 add) if
+                  atick 10 mod 9 eq
+                  (,vanish-on-edge
+                   nil nil getp <<g cdr sub 100 div swap <<g car sub 100 div swap shot)
+                  () if)
                  swap 1 nil cons cons
-                 getp cons nil cons
+                 0 getp cons nil cons cons
                  0 0 shot)
-                 0 359 45 do)
+                 0 360 45 do)
                () if
                ;;<g 3.5 add >g
                )))
