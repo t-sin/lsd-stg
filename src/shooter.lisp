@@ -335,12 +335,20 @@
   (push (actor-tick actor) (actor-pstack actor))
   (incf (machine-ip machine)))
 
-(defun vm/getp (actor machine shooter)
+(defun vm/ppos (actor machine shooter)
+  (let ((p (find :player (shooter-actors shooter) :key #'actor-type)))
+    (push (actor-x p) (actor-pstack actor))
+    (push (actor-y p) (actor-pstack actor))
+    (incf (machine-ip machine))))
+
+(defun vm/pos (actor machine shooter)
+  (declare (ignore shooter))
   (push (actor-x actor) (actor-pstack actor))
   (push (actor-y actor) (actor-pstack actor))
   (incf (machine-ip machine)))
 
-(defun vm/setp (actor machine shooter)
+(defun vm/pos! (actor machine shooter)
+  (declare (ignore shooter))
   (let ((y (pop (actor-pstack actor)))
         (x (pop (actor-pstack actor))))
     (setf (actor-px actor) (actor-x actor)
@@ -349,14 +357,16 @@
           (actor-y actor) y)
     (incf (machine-ip machine))))
 
-(defun vm/getv (actor machine shooter)
+(defun vm/vel (actor machine shooter)
+  (declare (ignore shooter))
   (push (actor-vx actor) (actor-pstack actor))
   (push (actor-vy actor) (actor-pstack actor))
   (incf (machine-ip machine)))
 
-(defun vm/setv (actor machine shooter)
-  (let ((vx (pop (actor-pstack actor)))
-        (vy (pop (actor-pstack actor))))
+(defun vm/vel! (actor machine shooter)
+  (declare (ignore shooter))
+  (let ((vy (pop (actor-pstack actor)))
+        (vx (pop (actor-pstack actor))))
     (setf (actor-vx actor) vx
           (actor-vy actor) vy)
     (incf (machine-ip machine))))
