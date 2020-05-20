@@ -12,6 +12,8 @@
              :accessor shooter-db)
    (actors :initarg :actors
            :accessor shooter-actors)
+   (hitables :initarg :hitables
+             :accessor shooter-hitables)
    (inputs :initarg :inputs
            :accessor shooter-inputs)
    (animated :initarg :animated
@@ -41,6 +43,7 @@
   rad
   used
   code pstack gstack)
+(defstruct hitable id radius)
 
 (defstruct input id u d l r s z)
 (defstruct animated
@@ -346,6 +349,7 @@
 (defun make-shooter ()
   (let ((actors ())
         (inputs ())
+        (hitables ())
         (animated ())
         (db (make-hash-table)))
     (flet ((make-player ()
@@ -356,6 +360,7 @@
                                   :rad 0
                                   :code () :pstack () :gstack ())
                      actors)
+               (push (make-entity db :hitable :id id :radius 6) hitables)
                (push (make-entity db :input :id id :u nil :d nil :l nil :r nil :z nil) inputs)
                (push (make-entity db :animated :id id
                                   :idx 0 :num 4
@@ -371,6 +376,7 @@
                                   :rad 0
                                   :code *enemy-code* :pstack () :gstack ())
                      actors)
+               (push (make-entity db :hitable :id id :radius 6) hitables)
                (push (make-entity db :animated :id id
                                   :idx 0 :num 1
                                   :frame 0 :framenum 5
@@ -385,19 +391,36 @@
                                   :rad 0
                                   :code () :pstack () :gstack ())
                      actors)
+               (push (make-entity db :hitable :id id :radius 3) hitables)
                (push (make-entity db :animated :id id
                                   :idx 0 :num 1
                                   :frame 0 :framenum 5
                                   :name :bullet0
                                   :x 8 :y 8 :w 16 :h 16)
+                     animated)))
+           (make-particle ()
+             (let ((id (make-entity-id)))
+               (push (make-entity db :actor
+                                  :id id :type :particle :tick 0 :used nil
+                                  :x 0 :y 0 :vx 0 :vy 0
+                                  :rad 0
+                                  :code () :pstack () :gstack ())
+                     actors)
+               (push (make-entity db :animated :id id
+                                  :idx (floor (random 4)) :num 4
+                                  :frame 0 :framenum 5
+                                  :name :particle0
+                                  :x 4 :y 4 :w 8 :h 8)
                      animated))))
       (make-player)
       (make-enemy)
       (loop :for _ :from 0 :upto 2000 :do (make-bullet))
+      (loop :for _ :from 0 :upto 500 :do (make-particle))
       (make-instance 'shooter
                      :db db
                      :actors (coerce (nreverse actors) 'vector)
                      :inputs (coerce (nreverse inputs) 'vector)
+                     :hitables (coerce (nreverse hitables) 'vector)
                      :animated (coerce (nreverse animated) 'vector)))))
 
 (defun update-inputs (shooter &key (u nil u?) (d nil d?) (l nil l?) (r nil r?) (s nil s?) (z nil z?))
@@ -426,6 +449,45 @@
     :do (when (actor-used a)
           (setf (actor-x a) (+ (actor-x a) (actor-vx a))
                 (actor-y a) (+ (actor-y a) (actor-vy a))))))
+
+(defun distance (ax ay bx by)
+  (sqrt (+ (expt (- bx ax) 2)
+           (expt (- by ay) 2))))
+
+(defun check-collision (shooter)
+  (let* ((player (find :player (shooter-actors shooter) :key #'actor-type))
+         (ph (get-component shooter (actor-id player) :hitable))
+         (pid (actor-id player))
+         (px (actor-x player))
+         (py (actor-y player)))
+    (loop
+      :for a :across (shooter-actors shooter)
+      :for h := (get-component shooter (actor-id a) :hitable)
+      :for x := (actor-x a)
+      :for y := (actor-y a)
+      :unless (= (actor-id a) pid)
+      :do (when (and (not (null h))
+                     (> x (- px 50))
+                     (< x (+ px 50))
+                     (> y (- py 50))
+                     (< y (+ py 50)))
+            (when (< (distance px py x y)
+                     (+ (hitable-radius ph) (hitable-radius h)))
+              (setf (actor-used a) nil)
+              (loop
+                :for _ :from 1 :upto 5
+                :for p := (find-if (lambda (a)
+                                     (and (null (actor-used a))
+                                          (eq (actor-type a) :particle)))
+                                   (shooter-actors shooter))
+                :unless (null p)
+                :do (setf (actor-used p) t
+                          (actor-pstack p) nil
+                          (actor-code p) '(atick 20 gte (vanish) () if)
+                          (actor-x p) x
+                          (actor-y p) y
+                          (actor-vx p) (* 3 (- (random 2.0) 1))
+                          (actor-vy p) (* 3 (- (random 2.0) 1)))))))))
 
 (defun draw-animated (shooter renderer)
   (sdl2:set-render-draw-color renderer 255 255 255 255)
@@ -491,6 +553,7 @@
 (defmethod update ((scene shooter))
   (move-actors scene)
   (move-player scene)
+  (check-collision scene)
   (eval-objects scene)
   (update-ticks scene)
   (incf (shooter-tick scene)))
@@ -519,4 +582,5 @@
       (register :bullet0 "assets/bullet0.png")
       (register :bullet0-1 "assets/bullet0-1.png")
       (register :bullet0-2 "assets/bullet0-2.png")
+      (register :particle0 "assets/particle0.png")
       (register :tapir "assets/lsd-tapir.png"))))
