@@ -47,7 +47,7 @@
 
 (defun actor-vanish (actor)
   (setf (actor-used actor) nil
-        (actor-tick actor) 0))
+        (actor-tick actor) -1))
 
 (defstruct hitable id radius)
 
