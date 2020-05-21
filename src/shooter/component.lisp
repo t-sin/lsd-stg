@@ -14,6 +14,7 @@
            #:actor-rad
            #:actor-used
            #:actor-code
+           #:actor-tcode
            #:actor-pstack
            #:actor-gstack
            #:hitable  ; hitables
@@ -57,11 +58,7 @@
   vx vy
   rad
   used
-  code pstack gstack)
-
-(defun actor-vanish (actor)
-  (setf (actor-used actor) nil
-        (actor-tick actor) -1))
+  code tcode  pstack gstack)
 
 (defstruct hitable id radius)
 
