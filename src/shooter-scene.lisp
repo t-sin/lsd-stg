@@ -117,8 +117,11 @@
       :while (< ep (length (shooter-events shooter)))
       :finally (setf (shooter-ep shooter) ep)
       :do (let ((e (aref (shooter-events shooter) ep)))
-            (when (<= (car e) (shooter-tick shooter))
-              (funcall (cdr e) shooter))))))
+            (if (<= (car e) (shooter-tick shooter))
+                (funcall (cdr e) shooter)
+                (progn
+                  (setf (shooter-ep shooter) ep)
+                  (return)))))))
 
 (defun update-ticks (shooter)
   (loop
