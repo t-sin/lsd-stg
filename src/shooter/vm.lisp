@@ -52,7 +52,11 @@
            #:vm/vel
            #:vm/vel!
            #:vm/vanish
-           #:vm/shot))
+           #:vm/shot
+           ;; utilities
+           #:shot
+           #:put-actor
+           #:$put))
 (in-package #:lsd.shooter.vm)
 
 (defstruct vm
@@ -375,27 +379,44 @@
   (actor-vanish actor)
   (incf (vm-ip vm)))
 
-(defun vm/shot (actor vm shooter)
+(defun put-actor (shooter px py vx vy gargs args code type)
   (let ((b (find-if (lambda (a)
                       (and (null (actor-used a))
-                           (eq (actor-type a) :bullet)))
+                           (eq (actor-type a) type)))
                     (shooter-actors shooter))))
     (when b
-      (let ((vy (pop (actor-pstack actor)))
-            (vx (pop (actor-pstack actor)))
-            (gargs (pop (actor-pstack actor)))
-            (args (pop (actor-pstack actor)))
-            (code (pop (actor-pstack actor))))
-        (setf (actor-used b) t
-              (actor-tick actor) 0)
-        (setf (actor-x b) (actor-x actor)
-              (actor-y b) (actor-y actor))
-        (setf (actor-vx b) vx
-              (actor-vy b) vy)
-        (setf (actor-code b) code
-              (actor-pstack b) (reverse args)
-              (actor-gstack b) (reverse gargs))))
-    (incf (vm-ip vm))))
+      (setf (actor-used b) t
+            (actor-tick b) 0)
+      (setf (actor-x b) px
+            (actor-y b) py)
+      (setf (actor-vx b) vx
+            (actor-vy b) vy)
+      (setf (actor-code b) code
+            (actor-pstack b) args
+            (actor-gstack b) gargs))))
+
+(defun shot (shooter gun vx vy gargs args code type)
+  (put-actor shooter
+             (actor-x gun) (actor-y gun)
+             vx vy
+             gargs args code
+             type))
+
+(defun vm/shot (actor vm shooter)
+  (let ((vy (pop (actor-pstack actor)))
+        (vx (pop (actor-pstack actor)))
+        (gargs (pop (actor-pstack actor)))
+        (args (pop (actor-pstack actor)))
+        (code (pop (actor-pstack actor))))
+    (shot shooter actor vx vy (nreverse gargs) (nreverse args) code :bullet))
+  (incf (vm-ip vm)))
+
+(defun $put (type x y vx vy gargs args code)
+  (lambda (shooter)
+    (lsd.shooter.vm:put-actor shooter
+                              x y vx vy
+                              gargs args code
+                              type)))
 
 (defun eval-object (shooter actor)
   (let ((vm (make-vm :code (actor-code actor)
