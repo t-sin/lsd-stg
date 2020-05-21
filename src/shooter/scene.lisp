@@ -20,7 +20,7 @@
 (defclass shooter (scene)
   ((tick :initform 0
          :accessor shooter-tick)
-   (tick-enable-p :initform nil
+   (tick-enable-p :initform t
                   :accessor shooter-tick-enable-p)
    (event-table :initarg :events
                 :accessor shooter-events)
