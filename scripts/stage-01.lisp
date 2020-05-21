@@ -5,7 +5,7 @@
          (shot-5-way-to-player `(;; n-way
                                  >g
                                  ;; bullets will be vanish on edge of screen
-                                 ,vanish-on-edge nil nil
+                                 ,vanish-on-edge () nil nil
                                  ;; aim to playter
                                  ppos pos -1 v/mul v/add atan dup
                                  @g >rad add cos 4 mul swap
@@ -16,11 +16,11 @@
                            vel v/norm 0.1 gt (vel 0.94 v/mul vel!) (0 0 vel!) if
                            atick 30 gte atick 20 mod 0 eq and
                            ;; but else the bits shot to player n-way bullets.
-                           (,shot-5-way-to-player -16 16 8 do) () if) swap
+                           (,shot-5-way-to-player -16 16 8 do) () if) swap () swap
                           nil swap nil swap
                           8 mul 1 shot))
          (code `(;; at once,
-                 atick 0 eq (,shot-two-bits -1 1 2 do) () if
+                 atick 0 eq (swtime ,shot-two-bits -1 1 2 do) () if
                  ;; by 10 frames
                  atick 60 mod 0 eq
                  (;; shot arround 90-way bullets
@@ -33,5 +33,9 @@
     code))
 
 (vector
- (cons 0 ($put :player 200 500 0 0 () () ()))
- (cons 0 ($put :enemy 200 100 0 0 () () *enemy01*)))
+ (cons 0 ($put :player 200 500 0 0 () () () ()))
+ (cons 10 ($put :enemy 200 100 0 0 () () *enemy01* '(swtime)))
+ (cons 120 ($put :bullet 100 20 0 1 () () () ()))
+ (cons 130 ($put :bullet 200 20 0 1 () () () ()))
+ (cons 140 ($put :bullet 300 20 0 1 () () () ()))
+ (cons 150 ($put :bullet 400 20 0 1 () () () ())))
