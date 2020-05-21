@@ -45,6 +45,7 @@
            #:vm/@g
            #:vm/>g
            #:vm/gtick
+           #:vm/swtime
            #:vm/atick
            #:vm/ppos
            #:vm/pos
@@ -332,6 +333,13 @@
   (push (shooter-tick shooter) (actor-pstack actor))
   (incf (vm-ip vm)))
 
+(defun vm/swtime (actor vm shooter)
+  (declare (ignore actor))
+  (if (shooter-tick-enable-p shooter)
+      (setf (shooter-tick-enable-p shooter) nil)
+      (setf (shooter-tick-enable-p shooter) t))
+  (incf (vm-ip vm)))
+
 (defun vm/atick (actor vm shooter)
   (declare (ignore shooter))
   (push (actor-tick actor) (actor-pstack actor))
@@ -490,8 +498,10 @@
                      (<g (vm/<g actor vm shooter))
                      (@g (vm/@g actor vm shooter))
                      (>g (vm/>g actor vm shooter))
-                     ;;; actors
+                     ;;; global states
                      (gtick (vm/gtick actor vm shooter))
+                     (swtime (vm/swtime actor vm shooter))
+                     ;;; actors
                      (atick (vm/atick actor vm shooter))
                      (ppos (vm/ppos actor vm shooter))
                      (pos (vm/pos actor vm shooter))

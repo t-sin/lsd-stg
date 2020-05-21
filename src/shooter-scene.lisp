@@ -150,7 +150,8 @@
   (check-collision scene)
   (eval-objects scene)
   (update-ticks scene)
-  (incf (shooter-tick scene)))
+  (when (shooter-tick-enable-p scene)
+    (incf (shooter-tick scene))))
 
 (defmethod handle-input ((scene shooter) &rest keys &key &allow-other-keys)
   (apply #'update-inputs `(,scene ,@keys)))
