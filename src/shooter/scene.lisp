@@ -3,6 +3,9 @@
         #:lsd.scene)
   (:export #:shooter
            #:shooter-tick
+           #:shooter-tick-enable-p
+           #:shooter-events
+           #:shooter-ep
            #:shooter-db
            #:shooter-actors
            #:shooter-hitables
@@ -17,6 +20,12 @@
 (defclass shooter (scene)
   ((tick :initform 0
          :accessor shooter-tick)
+   (tick-enable-p :initform nil
+                  :accessor shooter-tick-enable-p)
+   (event-table :initarg :events
+                :accessor shooter-events)
+   (event-pointer :initform 0
+                  :accessor shooter-ep)
    (database :initarg :db
              :accessor shooter-db)
    (actors :initarg :actors

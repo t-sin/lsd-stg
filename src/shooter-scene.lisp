@@ -109,6 +109,17 @@
                   (mod (1+ (animated-idx anim)) (animated-num anim))))
       :do (incf (animated-frame anim)))))
 
+(defun process-events (shooter)
+  (when (< (shooter-ep shooter)
+           (length (shooter-events shooter)))
+    (loop
+      :for ep := (shooter-ep shooter) :then (incf ep)
+      :while (< ep (length (shooter-events shooter)))
+      :finally (setf (shooter-ep shooter) ep)
+      :do (let ((e (aref (shooter-events shooter) ep)))
+            (when (<= (car e) (shooter-tick shooter))
+              (funcall (cdr e) shooter))))))
+
 (defun update-ticks (shooter)
   (loop
     :for a :across (shooter-actors shooter)
@@ -145,6 +156,7 @@
                                                  (image-w bg-4) (image-h bg-4)))))
 
 (defmethod update ((scene shooter))
+  (process-events scene)
   (move-actors scene)
   (move-player scene)
   (check-collision scene)
@@ -178,13 +190,18 @@
       (register :particle0 "assets/particle0.png")
       (register :tapir "assets/lsd-tapir.png"))))
 
-(defun load-scripts (pathname)
+(defun load-script (pathname)
   (let ((pathname (asdf:system-relative-pathname :lsd pathname)))
     (with-open-file (in pathname
                         :direction :input
                         :element-type 'character)
-      (eval (let ((*package* (find-package :lsd.shooter.vm)))
-              (read in))))))
+      (loop
+        :for sexp := (let ((*package* (find-package :lsd.shooter.vm)))
+                       (read in nil :eof))
+        :with result := nil
+        :until (eq sexp :eof)
+        :finally (return-from load-script (first result))
+        :do (push (eval sexp) result)))))
 
 (defun make-shooter ()
   (let ((actors ())
@@ -195,7 +212,7 @@
     (flet ((make-player ()
              (let ((id (make-entity-id)))
                (push (make-entity db :actor
-                                  :id id :type :player :tick 0 :used t
+                                  :id id :type :player :tick 0 :used nil
                                   :x 200 :y 500 :px 0 :py 0 :vx 0 :vy 0
                                   :rad 0
                                   :code () :pstack () :gstack ())
@@ -211,11 +228,10 @@
            (make-enemy ()
              (let ((id (make-entity-id)))
                (push (make-entity db :actor
-                                  :id id :type :enemy :tick 0 :used t
+                                  :id id :type :enemy :tick 0 :used nil
                                   :x 200 :y 100 :px 0 :py 0 :vx 0 :vy 0
                                   :rad 0
-                                  :code (load-scripts "scripts/stage1-enemy.lisp")
-                                  :pstack () :gstack ())
+                                  :code () :pstack () :gstack ())
                      actors)
                (push (make-entity db :hitable :id id :radius 6) hitables)
                (push (make-entity db :animated :id id
@@ -254,11 +270,12 @@
                                   :x 8 :y 8 :w 16 :h 16)
                      animated))))
       (make-player)
-      (make-enemy)
+      (loop :for _ :from 0 :upto 100 :do (make-enemy))
       (loop :for _ :from 0 :upto 2000 :do (make-bullet))
       (loop :for _ :from 0 :upto 500 :do (make-particle))
       (make-instance 'shooter
                      :db db
+                     :events (load-script "scripts/stage-01.lisp")
                      :actors (coerce (nreverse actors) 'vector)
                      :inputs (coerce (nreverse inputs) 'vector)
                      :hitables (coerce (nreverse hitables) 'vector)
