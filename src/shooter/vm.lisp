@@ -405,7 +405,9 @@
       (setf (actor-used b) t
             (actor-tick b) 0)
       (setf (actor-x b) px
-            (actor-y b) py)
+            (actor-y b) py
+            (actor-px b) px
+            (actor-py b) py)
       (setf (actor-vx b) vx
             (actor-vy b) vy)
       (setf (actor-code b) code
