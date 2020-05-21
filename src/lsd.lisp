@@ -8,8 +8,10 @@
 (defstruct game
   (title "Lazy Sweet Dream")
   (version (asdf:component-version (asdf:find-system :lsd)))
-  (width 800)
-  (height 600)
+  (width 1280)
+  (height 960)
+  ;; (width 800)
+  ;; (height 600)
   (screen-width 800)
   (screen-height 600)
   scene)
@@ -38,7 +40,12 @@
       (sdl2:with-window (win :title (game-title game)
                              :w (game-width game)
                              :h (game-height game))
-          (sdl2:with-renderer (renderer win :index -1 :flags '(:accelerated))
+        (sdl2:with-renderer (renderer win :index -1 :flags '(:accelerated))
+          (let ((screen (sdl2:create-texture renderer
+                                             (sdl2:get-window-pixel-format win)
+                                             :target
+                                             (game-screen-width game)
+                                             (game-screen-height game))))
             (load-resources shooter renderer)
             (sdl2:with-event-loop (:method :poll)
               (:keydown (:keysym keysym)
@@ -46,8 +53,15 @@
               (:keyup (:keysym keysym)
                (proc-key-events keysym (game-scene game) nil))
               (:idle ()
+               (sdl2:set-render-target renderer screen)
                (draw (game-scene game) renderer)
+               (sdl2:set-render-target renderer nil)
+               (let ((window-rect (sdl2:make-rect 0 0
+                                                  (game-width game)
+                                                  (game-height game))))
+                 (sdl2:render-copy renderer screen
+                                   :dest-rect window-rect))
                (update (game-scene game))
                (sdl2:render-present renderer)
                (sdl2:delay (floor (/ 1000 60))))
-              (:quit () t)))))))
+              (:quit () t))))))))
