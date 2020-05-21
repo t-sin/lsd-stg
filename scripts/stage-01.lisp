@@ -29,7 +29,7 @@
                   (dup
                    >rad cos 2.3 mul >g
                    >rad sin 2.3 mul >g
-                   ,*vanish-on-edge* nil nil <g <g swap shot)
+                   ,*vanish-on-edge* () () () <g <g swap shot)
                   rnd 15 mul dup 360 add 4 do)
                  () if)))
     code))
