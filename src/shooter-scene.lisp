@@ -64,10 +64,14 @@
                      (+ (hitable-radius ph) (hitable-radius h)))
               (vanish-actor a shooter)
               (if (and (zerop (actor-vx a)) (zerop (actor-vy a)))
-                  (put-actor shooter x y (- x (actor-px a)) (- y (actor-py a))
+                  (put-actor shooter x y
+                             (* 0.5 (- x (actor-px a)))
+                             (* 0.5 (- y (actor-py a)))
                          () () particle-code ()
                          :particle)
-                  (put-actor shooter x y (actor-vx a) (actor-vy a)
+                  (put-actor shooter x y
+                             (* 0.5 (actor-vx a))
+                             (* 0.5 (actor-vy a))
                          () () particle-code ()
                          :particle)))))))
 
