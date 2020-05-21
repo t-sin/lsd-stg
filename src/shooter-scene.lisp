@@ -62,27 +62,16 @@
                      (< y (+ py 50)))
             (when (< (distance px py x y)
                      (+ (hitable-radius ph) (hitable-radius h)))
-              (let* ((p (find-if (lambda (a)
-                                   (and (null (actor-used a))
-                                        (eq (actor-type a) :particle)))
-                                 (shooter-actors shooter)))
-                     (anim (get-component shooter (actor-id p) :animated)))
-                (when p
-                  (setf (animated-idx anim) 0
-                        (animated-frame anim) 0)
-                  (setf (actor-used p) t
-                        (actor-pstack p) nil
-                        (actor-gstack p) nil
-                        (actor-code p) particle-code
-                        (actor-x p) x
-                        (actor-y p) y
-                        (actor-vx p) (if (zerop (actor-vx a))
-                                         (- x (actor-px a))
-                                         (actor-vx a))
-                        (actor-vy p) (if (zerop (actor-vy a))
-                                         (- y (actor-py a))
-                                         (actor-vy a)))
-                  (actor-vanish a))))))))
+              (vanish-actor a shooter)
+              (put-actor shooter x y
+                         (if (zerop (actor-vx a))
+                             (- x (actor-px a))
+                             (actor-vx a))
+                         (if (zerop (actor-vy a))
+                             (- y (actor-py a))
+                             (actor-vy a))
+                         () () particle-code ()
+                         :particle))))))
 
 (defun draw-animated (shooter renderer)
   (sdl2:set-render-draw-color renderer 255 255 255 255)
