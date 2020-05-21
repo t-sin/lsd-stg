@@ -1,11 +1,13 @@
+(defparameter *vanish-on-edge*
+  '(;; vanish itsself when out of screen
+    pos drop dup -10 lt swap 420 gt or (vanish) () if
+    pos swap drop dup -10 lt swap 560 gt or (vanish) () if))
+
 (defparameter *enemy01*
-  (let* ((vanish-on-edge `(;; vanish itsself when out of screen
-                           pos drop dup -10 lt swap 420 gt or (vanish) () if
-                           pos swap drop dup -10 lt swap 560 gt or (vanish) () if))
-         (shot-5-way-to-player `(;; n-way
+  (let* ((shot-5-way-to-player `(;; n-way
                                  >g
                                  ;; bullets will be vanish on edge of screen
-                                 ,vanish-on-edge () nil nil
+                                 ,*vanish-on-edge* () nil nil
                                  ;; aim to playter
                                  ppos pos -1 v/mul v/add atan dup
                                  @g >rad add cos 4 mul swap
@@ -27,15 +29,25 @@
                   (dup
                    >rad cos 2.3 mul >g
                    >rad sin 2.3 mul >g
-                   ,vanish-on-edge nil nil <g <g swap shot)
+                   ,*vanish-on-edge* nil nil <g <g swap shot)
                   rnd 15 mul dup 360 add 4 do)
                  () if)))
     code))
 
+(defparameter *zako*
+  `(;; aim to player
+    atick 15 mod 0 eq
+    (ppos pos -1 v/mul v/add atan >g
+          ,*vanish-on-edge* () () ()
+          @g cos 5 mul
+          <g sin 5 mul
+          shot)
+    () if))
+
 (vector
  (cons 0 ($put :player 200 500 0 0 () () () ()))
  (cons 10 ($put :enemy 200 100 0 0 () () *enemy01* '(swtime)))
- (cons 120 ($put :bullet 100 20 0 1 () () () ()))
- (cons 130 ($put :bullet 200 20 0 1 () () () ()))
- (cons 140 ($put :bullet 300 20 0 1 () () () ()))
- (cons 150 ($put :bullet 400 20 0 1 () () () ())))
+ (cons 100 ($put :enemy 50 20 0 1 () () *zako* ()))
+ (cons 150 ($put :enemy 150 20 0 1 () () *zako* ()))
+ (cons 200 ($put :enemy 200 20 0 1 () () *zako* ()))
+ (cons 250 ($put :enemy 250 20 0 1 () () *zako* ())))
