@@ -7,7 +7,12 @@
                "sdl2-image"
                "sdl2-ttf"
                "cl-portaudio")
-  :components ((:module "src"
+  :components ((:module "lib"
+                :components ((:file "hoard")
+                             (:file "petroglyph" :depends-on ("hoard"))
+                             (:file "sound" :depends-on ("hoard"))))
+               (:module "src"
+                :depends-on ("lib")
                 :serial t
                 :components ((:file "scene")
                              (:module "shooter"
