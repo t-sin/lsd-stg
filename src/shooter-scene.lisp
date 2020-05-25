@@ -137,8 +137,8 @@
                            (petroglyph:image-width bg-2) 25))
   (let ((bg-3 (hoard:get-by-name :bg-3)))
     (petroglyph:draw-image renderer bg-3
-                           (shooter-screen-x scene)
                            0 0 (petroglyph:image-width bg-3) (petroglyph:image-height bg-3)
+                           (shooter-screen-x scene)
                            (+ 25 (shooter-screen-h scene))
                            (petroglyph:image-width bg-3) 25))
   (let ((bg-4 (hoard:get-by-name :bg-4)))
