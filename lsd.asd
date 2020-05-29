@@ -3,14 +3,18 @@
   :license "MIT"
   :author "Shinichi Tanaka <shinichi.tanaka45@gmail.com>"
   :description "Bullet-hell shooter 'Lazy Sweet Dream'"
-  :depends-on ("sdl2"
+  :depends-on ("alexandria"
+               "anaphora"
+               "cl-glfw3"
+               "sdl2"
                "sdl2-image"
                "sdl2-ttf"
                "cl-portaudio")
   :components ((:module "lib"
                 :components ((:file "hoard")
                              (:file "petroglyph" :depends-on ("hoard"))
-                             (:file "sound" :depends-on ("hoard"))))
+                             (:file "sound" :depends-on ("hoard"))
+                             (:file "fauna")))
                (:module "src"
                 :depends-on ("lib")
                 :serial t
