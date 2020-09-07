@@ -14,6 +14,33 @@
            :initarg :height
            :accessor image-height)))
 
+(defpackage #:petroglyph.glfw
+  (:use #:cl
+        #:hoard
+        #:petroglyph.class)
+  (:export #:set-color
+           #:fill-rect
+           #:draw-point
+           #:draw-image))
+(in-package #:petroglyph.glfw)
+
+(defmethod register ((type (eql :image)) name pathname)
+  (let ((img (make-instance 'image
+                            :name name
+                            :type :image
+                            :pathname pathname)))
+    (hoard:register-by-name img)
+    img))
+
+(defmethod load-resource ((res image) context)
+  (let* ((img (pngload:load-file (resource-pathname res)))
+         (w (pngload:width img))
+         (h (pngload:height img)))
+    (setf (resource-obj res) img
+          (image-width res) w
+          (image-height res) h)
+    img))
+
 (defpackage #:petroglyph.sdl2
   (:use #:cl
         #:hoard

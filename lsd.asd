@@ -6,6 +6,9 @@
   :depends-on ("alexandria"
                "anaphora"
                "cl-glfw3"
+               "cl-opengl"
+               "pngload"
+
                "sdl2"
                "sdl2-image"
                "sdl2-ttf"
@@ -24,6 +27,7 @@
                               :components ((:file "util")
                                            (:file "scene")
                                            (:file "component")
-                                           (:file "vm")))
+                                           (:file "vm")
+                                           (:file "dc")))
                              (:file "shooter-scene")
                              (:file "lsd")))))
